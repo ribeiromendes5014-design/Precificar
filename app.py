@@ -1,13 +1,19 @@
 import streamlit as st
+import re
 
+# Puxar os dados do secrets.toml
 videos = st.secrets["google_drive"]["videos"]
 titulos = st.secrets["google_drive"]["titulos"]
 descricoes = st.secrets["google_drive"]["descricoes"]
 
-# Função para gerar link embed do Google Drive com autoplay
-video_embed_link = gerar_link_embed(videos[idx])
-def gerar_link_embed(video_id):
-    return f"https://drive.google.com/uc?export=preview&id={video_id}&autoplay=1"
+# Função para extrair o ID do vídeo e montar link embed com autoplay
+def gerar_link_embed(drive_url):
+    match = re.search(r'/d/([a-zA-Z0-9_-]+)', drive_url)
+    if match:
+        video_id = match.group(1)
+        return f"https://drive.google.com/uc?export=preview&id={video_id}&autoplay=1"
+    else:
+        return drive_url  # se não achar, retorna a url original
 
 # Estado para índice do vídeo atual
 if "video_index" not in st.session_state:
@@ -17,17 +23,19 @@ idx = st.session_state.video_index
 
 # Layout: botões para navegar entre vídeos
 col1, col2, col3 = st.columns([1, 6, 1])
+
 with col1:
     if st.button("⬆️ Anterior") and idx > 0:
         st.session_state.video_index -= 1
+
 with col3:
-    if st.button("⬇️ Próximo") and idx < len(video_ids) - 1:
+    if st.button("⬇️ Próximo") and idx < len(videos) - 1:
         st.session_state.video_index += 1
 
-# Gera o link do vídeo atual
-video_embed_link = gerar_link_embed(video_ids[idx])
+# Gera o link embed para o vídeo atual
+video_embed_link = gerar_link_embed(videos[idx])
 
-# Exibe o vídeo em iframe responsivo
+# Exibe o vídeo com iframe responsivo
 st.markdown(
     f"""
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
@@ -43,8 +51,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Mostra título e descrição do vídeo
+# Mostra título e descrição do vídeo atual
 st.markdown(f"### {titulos[idx]}")
 st.write(descricoes[idx])
-
-
