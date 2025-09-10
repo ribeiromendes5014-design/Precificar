@@ -5,6 +5,7 @@ titulos = st.secrets["google_drive"]["titulos"]
 descricoes = st.secrets["google_drive"]["descricoes"]
 
 # Função para gerar link embed do Google Drive com autoplay
+video_embed_link = gerar_link_embed(videos[idx])
 def gerar_link_embed(video_id):
     return f"https://drive.google.com/uc?export=preview&id={video_id}&autoplay=1"
 
@@ -45,4 +46,5 @@ st.markdown(
 # Mostra título e descrição do vídeo
 st.markdown(f"### {titulos[idx]}")
 st.write(descricoes[idx])
+
 
