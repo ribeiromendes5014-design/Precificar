@@ -1,7 +1,6 @@
 import streamlit as st
 
-# Puxa os dados do secrets
-video_ids = st.secrets["google_drive"]["video_ids"]
+videos = st.secrets["google_drive"]["videos"]
 titulos = st.secrets["google_drive"]["titulos"]
 descricoes = st.secrets["google_drive"]["descricoes"]
 
@@ -46,3 +45,4 @@ st.markdown(
 # Mostra título e descrição do vídeo
 st.markdown(f"### {titulos[idx]}")
 st.write(descricoes[idx])
+
