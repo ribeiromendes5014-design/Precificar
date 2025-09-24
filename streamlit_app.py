@@ -572,53 +572,56 @@ def papelaria_aba():
 
     
     # ---------------------
-    # Criação das abas
-    # ---------------------
-    aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
+# Criação das abas
+# ---------------------
+aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
 
-    # =====================================
-    # Aba Campos (gerencia colunas extras)
-    # =====================================
-    with aba_campos:
-        st.header("Campos / Colunas Personalizadas")
+# =====================================
+# Aba Campos (gerencia colunas extras)
+# =====================================
+with aba_campos:
+    st.header("Campos / Colunas Personalizadas")
 
-        with st.form("form_add_campo"):
-            st.subheader("Adicionar novo campo")
-            nome_campo = st.text_input("Nome do Campo (será o nome da coluna)")
-            aplicacao = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"])
-            tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"])
-            opcoes = st.text_input("Opções (se 'Seleção', separe por vírgula)")
-            adicionar = st.form_submit_button("Adicionar Campo")
+    with st.form("form_add_campo"):
+        st.subheader("Adicionar novo campo")
+        nome_campo = st.text_input("Nome do Campo (será o nome da coluna)")
+        aplicacao = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"])
+        tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"])
+        opcoes = st.text_input("Opções (se 'Seleção', separe por vírgula)")
+        adicionar = st.form_submit_button("Adicionar Campo")
 
-            if adicionar:
-                if not nome_campo.strip():
-                    st.warning("Informe um nome de campo válido.")
+        if adicionar:
+            if not nome_campo.strip():
+                st.warning("Informe um nome de campo válido.")
+            else:
+                ja_existe = (
+                    (st.session_state.campos["Campo"].astype(str).str.lower() == nome_campo.strip().lower())
+                    & (st.session_state.campos["Aplicação"] == aplicacao)
+                ).any()
+                if ja_existe:
+                    st.warning("Já existe um campo com esse nome para essa aplicação.")
                 else:
-                    ja_existe = (
-                        (st.session_state.campos["Campo"].astype(str).str.lower() == nome_campo.strip().lower())
-                        & (st.session_state.campos["Aplicação"] == aplicacao)
-                    ).any()
-                    if ja_existe:
-                        st.warning("Já existe um campo com esse nome para essa aplicação.")
-                    else:
-                        nova_linha = {
-                            "Campo": nome_campo.strip(),
-                            "Aplicação": aplicacao,
-                            "Tipo": tipo,
-                            "Opções": opcoes
-                        }
-                        st.session_state.campos = pd.concat(
-                            [st.session_state.campos, pd.DataFrame([nova_linha])],
-                            ignore_index=True
-                        )
-                        st.success(f"Campo '{nome_campo}' adicionado para {aplicacao}!")
-                        if aplicacao in ("Insumos", "Ambos"):
-                            if nome_campo not in st.session_state.insumos.columns:
-                                st.session_state.insumos[nome_campo] = ""
-                        if aplicacao in ("Produtos", "Ambos"):
-                            if nome_campo not in st.session_state.produtos.columns:
-                                st.session_state.produtos[nome_campo] = ""
-                        st.rerun()
+                    nova_linha = {
+                        "Campo": nome_campo.strip(),
+                        "Aplicação": aplicacao,
+                        "Tipo": tipo,
+                        "Opções": opcoes
+                    }
+                    st.session_state.campos = pd.concat(
+                        [st.session_state.campos, pd.DataFrame([nova_linha])],
+                        ignore_index=True
+                    )
+                    st.success(f"Campo '{nome_campo}' adicionado para {aplicacao}!")
+
+                    # Atualiza colunas nos dataframes insumos e produtos conforme a aplicação
+                    if aplicacao in ("Insumos", "Ambos"):
+                        if nome_campo not in st.session_state.insumos.columns:
+                            st.session_state.insumos[nome_campo] = ""
+                    if aplicacao in ("Produtos", "Ambos"):
+                        if nome_campo not in st.session_state.produtos.columns:
+                            st.session_state.produtos[nome_campo] = ""
+
+                    st.rerun()
 
         st.markdown("### Campos cadastrados")
         if st.session_state.campos.empty:
@@ -1061,6 +1064,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
