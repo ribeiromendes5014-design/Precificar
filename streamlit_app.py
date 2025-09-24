@@ -396,34 +396,25 @@ def papelaria_aba():
     st.write("📚 Gerenciador Papelaria Personalizada")
 
     # ---------------------
-    # Config. de arquivos remotos (ajuste para o seu repositório real)
+    # Configuração de arquivos remotos (ajuste para o seu repositório real)
     # ---------------------
     URL_BASE = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/"
-
     INSUMOS_CSV_URL = URL_BASE + "insumos_papelaria.csv"
     PRODUTOS_CSV_URL = URL_BASE + "produtos_papelaria.csv"
     CAMPOS_CSV_URL = URL_BASE + "categorias_papelaria.csv"
-
 
     # ---------------------
     # Colunas padrão dos dados
     # ---------------------
     INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
     PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
-
-    # Definição da tabela de "campos extras" (metadados)
     COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
-                                                               # Tipo: Texto | Número | Seleção
-                                                               # Opções: CSV de opções (apenas se Tipo == Seleção)
 
     # ---------------------
     # Utilitários
     # ---------------------
     def carregar_csv_github(url, colunas=None):
-        """
-        Tenta carregar um CSV remoto.
-        Se 'colunas' for fornecido, garante essas colunas (criando se faltar).
-        """
+        """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
@@ -432,14 +423,11 @@ def papelaria_aba():
                 for c in colunas:
                     if c not in df.columns:
                         df[c] = None
-                # Reordena
                 df = df[[c for c in colunas if c in df.columns]]
             return df
         except Exception as e:
             st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
-            if colunas is not None:
-                return pd.DataFrame(columns=colunas)
-            return pd.DataFrame()
+            return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
 
     def baixar_csv(df, nome_arquivo):
         csv = df.to_csv(index=False, encoding="utf-8-sig")
@@ -456,11 +444,10 @@ def papelaria_aba():
         return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
 
     def col_defs_para(aplicacao: str):
-        """Retorna DataFrame de campos extras filtrando por Aplicação."""
+        """Retorna DataFrame de campos extras filtrando por aplicação."""
         df = st.session_state.campos
         if df.empty:
             return df
-        # "Ambos" vale para as duas abas
         return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
 
     def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
@@ -472,22 +459,18 @@ def papelaria_aba():
         return df
 
     def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
-        """Desenha o widget apropriado conforme o tipo."""
+        """Renderiza o widget apropriado conforme o tipo de campo."""
         if tipo == "Número":
-            # valor padrão numérico seguro
             valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
             return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
         elif tipo == "Seleção":
             lista = _opcoes_para_lista(opcoes)
             if not lista:
-                # Se não há opções, degrade para texto
                 return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
-            # Se existir valor padrão que não está na lista, inclui temporariamente
             if valor_padrao not in lista and valor_padrao not in (None, "", "nan"):
                 lista = [str(valor_padrao)] + [o for o in lista if o != valor_padrao]
             return st.selectbox(label, options=lista, index=0 if valor_padrao in (None, "", "nan") else lista.index(str(valor_padrao)), key=key)
         else:
-            # Texto (default)
             return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
 
     # ---------------------
@@ -495,21 +478,23 @@ def papelaria_aba():
     # ---------------------
     if "insumos" not in st.session_state:
         st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL)
+
     if "produtos" not in st.session_state:
         st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL)
+
     if "campos" not in st.session_state:
-        # Lê definições de campos (antigo "categorias")
         st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
 
-    # Sempre garante as colunas base existirem (em caso de CSV vazio)
+    # Garante colunas base nos dados
     for col in INSUMOS_BASE_COLS:
         if col not in st.session_state.insumos.columns:
             st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
+
     for col in PRODUTOS_BASE_COLS:
         if col not in st.session_state.produtos.columns:
             st.session_state.produtos[col] = "" if col not in ["Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"] else 0.0
 
-    # Garante colunas extras atuais nos DataFrames
+    # Garante colunas extras
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
@@ -1007,6 +992,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
