@@ -203,7 +203,7 @@ with tab_manual:
         st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
         st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
 
-        # Definir variáveis para processar_dataframe, ajustar conforme seu app
+        # Variáveis para processar_dataframe
         frete_total = st.session_state.get("frete_total", 0.0)
         custos_extras = st.session_state.get("custos_extras", 0.0)
         modo_margem = st.session_state.get("modo_margem", "margem_padrao")
@@ -241,11 +241,31 @@ with tab_manual:
                 else:
                     st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
-        # Exibir resultados após o formulário, fora do form para evitar erros
+        st.markdown("---")
+        st.subheader("Produtos cadastrados")
+
+        # Exibir produtos com botão de exclusão
+        produtos = st.session_state.produtos_manuais
+
+        if produtos.empty:
+            st.info("⚠️ Nenhum produto cadastrado.")
+        else:
+            # Criar um botão de exclusão para cada produto
+            for i, row in produtos.iterrows():
+                cols = st.columns([4, 1])
+                with cols[0]:
+                    st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário: R$ {row['Custo Unitário']:.2f}")
+                with cols[1]:
+                    if st.button(f"❌ Excluir", key=f"excluir_{i}"):
+                        st.session_state.produtos_manuais = produtos.drop(i).reset_index(drop=True)
+                        st.experimental_rerun()
+
+        # Exibir resultados após possíveis alterações, fora do form
         if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.info("⚠️ Nenhum produto processado para exibir.")
+
 
 
 
@@ -267,6 +287,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
