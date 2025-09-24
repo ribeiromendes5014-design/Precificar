@@ -188,23 +188,9 @@ with tab_manual:
             custo_extra_produto = st.number_input(
                 "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
             )
-            with aba_prec_manual:
-    st.subheader("Adicionar novo produto")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        produto = st.text_input("📝 Nome do Produto")
-        quantidade = st.number_input("📦 Quantidade", min_value=1, step=1)
-        valor_pago = st.number_input("💰 Valor Pago (R$)", min_value=0.0, step=0.01)
-        imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
-    with col2:
-        valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
-        custo_extra_produto = st.number_input(
-            "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
-        )
-        preco_final_sugerido = st.number_input(
-            "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
-        )
+            preco_final_sugerido = st.number_input(
+                "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
+            )
 
         custo_total_unitario = valor_pago + custo_extra_produto
 
@@ -317,5 +303,6 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
