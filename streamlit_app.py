@@ -188,27 +188,76 @@ with tab_manual:
             custo_extra_produto = st.number_input(
                 "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
             )
-            preco_final_sugerido = st.number_input(
-                "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
-            )
+            with aba_prec_manual:
+    st.subheader("Adicionar novo produto")
 
-            # **Correção aqui:**
-            # Se preco_final_sugerido > 0, usar esse valor como preço final direto
-            # e calcular margem baseado nele para mostrar ao usuário (opcional)
-            custo_total_unitario = valor_pago + custo_extra_produto
+    col1, col2 = st.columns(2)
+    with col1:
+        produto = st.text_input("📝 Nome do Produto")
+        quantidade = st.number_input("📦 Quantidade", min_value=1, step=1)
+        valor_pago = st.number_input("💰 Valor Pago (R$)", min_value=0.0, step=0.01)
+        imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
+    with col2:
+        valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
+        custo_extra_produto = st.number_input(
+            "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
+        )
+        preco_final_sugerido = st.number_input(
+            "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
+        )
 
-            if preco_final_sugerido > 0:
-                margem_calculada = 0.0
-                if custo_total_unitario > 0:
-                    margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
-                margem_manual = round(margem_calculada, 2)
-                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
-                preco_a_vista_calc = preco_final_sugerido
-                preco_no_cartao_calc = preco_final_sugerido / 0.8872
+        custo_total_unitario = valor_pago + custo_extra_produto
+
+        if preco_final_sugerido > 0:
+            margem_calculada = 0.0
+            if custo_total_unitario > 0:
+                margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
+            margem_manual = round(margem_calculada, 2)
+            st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
+            preco_a_vista_calc = preco_final_sugerido
+            preco_no_cartao_calc = preco_final_sugerido / 0.8872
+        else:
+            margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
+            preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
+            preco_no_cartao_calc = preco_a_vista_calc / 0.8872
+
+    st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
+    st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
+
+    with st.form("form_submit_manual"):
+        adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
+        if adicionar_produto:
+            if produto and quantidade > 0 and valor_pago >= 0:
+                imagem_bytes = None
+                if imagem_file is not None:
+                    imagem_bytes = imagem_file.read()
+                    imagens_dict[produto] = imagem_bytes
+
+                novo_produto = pd.DataFrame([{
+                    "Produto": produto,
+                    "Qtd": quantidade,
+                    "Custo Unitário": valor_pago,
+                    "Custos Extras Produto": custo_extra_produto,
+                    "Margem (%)": margem_manual,
+                    "Imagem": imagem_bytes
+                }])
+                st.session_state.produtos_manuais = pd.concat(
+                    [st.session_state.produtos_manuais, novo_produto],
+                    ignore_index=True
+                )
+                st.session_state.df_produtos_geral = processar_dataframe(
+                    st.session_state.produtos_manuais,
+                    frete_total,
+                    custos_extras,
+                    modo_margem_global,
+                    margem_fixa_sidebar
+                )
+                st.success("✅ Produto adicionado!")
             else:
-                margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
-                preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
-                preco_no_cartao_calc = preco_a_vista_calc / 0.8872
+                st.warning("⚠️ Preencha todos os campos obrigatórios.")
+
+    if not st.session_state.produtos_manuais.empty:
+        exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
 
         st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
         st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
@@ -268,4 +317,5 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
