@@ -188,64 +188,65 @@ with tab_manual:
         custo_total_unitario = valor_pago + custo_extra_produto
 
         if preco_final_sugerido > 0:
-    margem_calculada = 0.0
-    if custo_total_unitario > 0:
-        margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
-    margem_manual = round(margem_calculada, 2)
-    st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
-    preco_a_vista_calc = preco_final_sugerido
-    preco_no_cartao_calc = preco_final_sugerido / 0.8872
-else:
-    margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
-    preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
-    preco_no_cartao_calc = preco_a_vista_calc / 0.8872
-
-st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
-st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
-
-# Definir variáveis para processar_dataframe, ajustar conforme seu app
-frete_total = st.session_state.get("frete_total", 0.0)
-custos_extras = st.session_state.get("custos_extras", 0.0)
-modo_margem = st.session_state.get("modo_margem", "margem_padrao")
-margem_fixa = st.session_state.get("margem_fixa", 30.0)
-
-with st.form("form_submit_manual"):
-    adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
-    if adicionar_produto:
-        if produto and quantidade > 0 and valor_pago >= 0:
-            imagem_bytes = None
-            if imagem_file is not None:
-                imagem_bytes = imagem_file.read()
-                imagens_dict[produto] = imagem_bytes
-
-            novo_produto = pd.DataFrame([{
-                "Produto": produto,
-                "Qtd": quantidade,
-                "Custo Unitário": valor_pago,
-                "Custos Extras Produto": custo_extra_produto,
-                "Margem (%)": margem_manual,
-                "Imagem": imagem_bytes
-            }])
-            st.session_state.produtos_manuais = pd.concat(
-                [st.session_state.produtos_manuais, novo_produto],
-                ignore_index=True
-            )
-            st.session_state.df_produtos_geral = processar_dataframe(
-                st.session_state.produtos_manuais,
-                frete_total,
-                custos_extras,
-                modo_margem,
-                margem_fixa
-            )
-            st.success("✅ Produto adicionado!")
+            margem_calculada = 0.0
+            if custo_total_unitario > 0:
+                margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
+            margem_manual = round(margem_calculada, 2)
+            st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
+            preco_a_vista_calc = preco_final_sugerido
+            preco_no_cartao_calc = preco_final_sugerido / 0.8872
         else:
-            st.warning("⚠️ Preencha todos os campos obrigatórios.")
+            margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
+            preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
+            preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
-    # Exibir resultados após o formulário, fora do form para evitar erros
-    if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-        exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-    else:
-        st.info("⚠️ Nenhum produto processado para exibir.")
+        st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
+        st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
+
+        # Definir variáveis para processar_dataframe, ajustar conforme seu app
+        frete_total = st.session_state.get("frete_total", 0.0)
+        custos_extras = st.session_state.get("custos_extras", 0.0)
+        modo_margem = st.session_state.get("modo_margem", "margem_padrao")
+        margem_fixa = st.session_state.get("margem_fixa", 30.0)
+
+        with st.form("form_submit_manual"):
+            adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
+            if adicionar_produto:
+                if produto and quantidade > 0 and valor_pago >= 0:
+                    imagem_bytes = None
+                    if imagem_file is not None:
+                        imagem_bytes = imagem_file.read()
+                        imagens_dict[produto] = imagem_bytes
+
+                    novo_produto = pd.DataFrame([{
+                        "Produto": produto,
+                        "Qtd": quantidade,
+                        "Custo Unitário": valor_pago,
+                        "Custos Extras Produto": custo_extra_produto,
+                        "Margem (%)": margem_manual,
+                        "Imagem": imagem_bytes
+                    }])
+                    st.session_state.produtos_manuais = pd.concat(
+                        [st.session_state.produtos_manuais, novo_produto],
+                        ignore_index=True
+                    )
+                    st.session_state.df_produtos_geral = processar_dataframe(
+                        st.session_state.produtos_manuais,
+                        frete_total,
+                        custos_extras,
+                        modo_margem,
+                        margem_fixa
+                    )
+                    st.success("✅ Produto adicionado!")
+                else:
+                    st.warning("⚠️ Preencha todos os campos obrigatórios.")
+
+        # Exibir resultados após o formulário, fora do form para evitar erros
+        if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+            exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+        else:
+            st.info("⚠️ Nenhum produto processado para exibir.")
+
 
 
 
@@ -266,6 +267,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
