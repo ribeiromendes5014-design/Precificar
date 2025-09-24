@@ -95,7 +95,7 @@ modo_margem_global = "Margem fixa"
 margem_fixa_sidebar = 30.0
 
 # URL do CSV do GitHub
-ARQ_CAIXAS = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/precificacao.csv"
+ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
 
 # dicionário para armazenar imagens em memória para PDF
 imagens_dict = {}  # produto → imagem bytes
@@ -254,3 +254,4 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
