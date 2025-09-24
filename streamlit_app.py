@@ -1,6 +1,35 @@
 import streamlit as st
 import pandas as pd
 
+
+
+import streamlit as st
+import pandas as pd
+
+# Funções auxiliares (exemplo simplificado)
+def exibir_precificacao():
+    st.header("📊 Precificação")
+    st.write("Conteúdo da aba Precificação aqui...")
+    # Aqui você pode colocar o código que já tem da aba Precificador (pdf, manual, github)
+
+def exibir_papelaria():
+    st.header("🖋️ Papelaria")
+    st.write("Conteúdo da aba Papelaria aqui...")
+    # Coloque o que quiser mostrar na aba Papelaria
+
+# Sidebar para seleção da aba
+pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelaria"])
+
+# Mostrar conteúdo com base na seleção
+if pagina == "Precificação":
+    exibir_precificacao()
+elif pagina == "Papelaria":
+    exibir_papelaria()
+
+
+
+
+
 # ===============================
 # Funções auxiliares
 # ===============================
@@ -356,3 +385,4 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
