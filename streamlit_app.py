@@ -131,8 +131,6 @@ with tab_pdf:
                 else:
                     st.info("⚠️ Nenhum produto processado para exibir.")
 
-                else:
-                    st.info("⚠️ Nenhum produto processado para exibir.")
 
         except Exception as e:
             st.error(f"❌ Erro ao processar o PDF: {e}")
@@ -301,6 +299,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
