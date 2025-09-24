@@ -126,8 +126,11 @@ with tab_pdf:
                     modo_margem,
                     margem_fixa
                 )
-                st.success("✅ Produtos precificados com sucesso!")
-                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+                if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+                    exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+                else:
+                    st.info("⚠️ Nenhum produto processado para exibir.")
+
         except Exception as e:
             st.error(f"❌ Erro ao processar o PDF: {e}")
     else:
@@ -295,6 +298,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
