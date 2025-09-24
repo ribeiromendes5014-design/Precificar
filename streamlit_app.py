@@ -32,7 +32,12 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 if "Custos Extras Produto" in df.columns:
                     st.write(f"🛠 Custos Extras: R$ {row.get('Custos Extras Produto', 0):.2f}")
                 if "Margem (%)" in df.columns:
-                    st.write(f"📈 Margem: {row.get('Margem (%)', 0)}%")
+                    margem_val = row.get("Margem (%)", 0)
+                    try:
+                        margem_float = float(margem_val)
+                    except Exception:
+                        margem_float = 0
+                    st.write(f"📈 Margem: {margem_float:.2f}%")
                 if "Preço à Vista" in df.columns:
                     st.write(f"💸 Preço à Vista: R$ {row.get('Preço à Vista', 0):.2f}")
                 if "Preço no Cartão" in df.columns:
@@ -40,6 +45,7 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
 
     st.markdown("### 📋 Tabela Consolidada")
     st.dataframe(df, use_container_width=True)
+
 
 
 import pandas as pd
@@ -62,7 +68,11 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
 
     if modo_margem == "Margem fixa":
         df["Margem (%)"] = margem_fixa
+    elif modo_margem == "Margem por produto":
+        # Preencher NaNs com 0, ou você pode decidir não preencher e tratar depois
+        df["Margem (%)"] = df["Margem (%)"].fillna(0)
     else:
+        # segurança para casos inesperados
         df["Margem (%)"] = df["Margem (%)"].fillna(0)
 
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
@@ -323,6 +333,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
