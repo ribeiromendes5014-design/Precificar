@@ -687,6 +687,8 @@ def papelaria_aba():
         baixar_csv(st.session_state.campos, "campos_papelaria.csv")
         if st.button("📤 Salvar CAMPO no GitHub"):
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "categorias_papelaria.csv", st.session_state.campos, GITHUB_BRANCH)
+            # Criação das abas
+aba_insumos, aba_produtos = st.tabs(["🧮 Insumos", "📦 Produtos"])
 
     # =====================================
 # Aba Insumos
@@ -1054,6 +1056,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
