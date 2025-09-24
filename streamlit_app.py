@@ -183,18 +183,23 @@ with tab_manual:
                 "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
             )
 
-            margem_manual = 0.0
+            # **Correção aqui:**
+            # Se preco_final_sugerido > 0, usar esse valor como preço final direto
+            # e calcular margem baseado nele para mostrar ao usuário (opcional)
+            custo_total_unitario = valor_pago + custo_extra_produto
+
             if preco_final_sugerido > 0:
-                custo_total_unitario = valor_pago + custo_extra_produto
-                margem_calculada = max(0.0, (preco_final_sugerido / custo_total_unitario - 1) * 100) if custo_total_unitario > 0 else 0.0
+                margem_calculada = 0.0
+                if custo_total_unitario > 0:
+                    margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
                 margem_manual = round(margem_calculada, 2)
-                st.info(f"🧮 Margem calculada automaticamente: {margem_manual:.2f}%")
+                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
+                preco_a_vista_calc = preco_final_sugerido
+                preco_no_cartao_calc = preco_final_sugerido / 0.8872
             else:
                 margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
-
-        custo_total_unitario = valor_pago + custo_extra_produto
-        preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
-        preco_no_cartao_calc = preco_a_vista_calc / 0.8872
+                preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
+                preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
         st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
         st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
@@ -254,4 +259,3 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
-
