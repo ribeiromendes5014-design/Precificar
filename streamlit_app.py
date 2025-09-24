@@ -534,6 +534,20 @@ PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Ca
 COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
 
 
+# ===============================
+# Definições globais
+# ===============================
+URL_BASE = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/"
+
+INSUMOS_CSV_URL = URL_BASE + "insumos_papelaria.csv"
+PRODUTOS_CSV_URL = URL_BASE + "produtos_papelaria.csv"
+CAMPOS_CSV_URL   = URL_BASE + "categorias_papelaria.csv"
+
+INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
+PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
+COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
+
+
 # ---------------------
 # Estado da sessão
 # ---------------------
@@ -558,6 +572,7 @@ for col in PRODUTOS_BASE_COLS:
 # Garante colunas extras
 st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+
 
 # ---------------------
 # Verifica se houve alteração nos produtos para salvar automaticamente
@@ -1072,6 +1087,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
