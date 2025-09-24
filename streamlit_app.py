@@ -396,6 +396,13 @@ import requests
 from io import StringIO
 import hashlib
 
+import streamlit as st
+import pandas as pd
+import hashlib
+import base64
+import requests
+from io import StringIO
+
 # =====================================
 # Aba Papelaria (função completa, com campos dinâmicos e salvamento automático no GitHub)
 # =====================================
@@ -464,144 +471,129 @@ def papelaria_aba():
         return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
     # ---------------------
-# Utilitários de manipulação
-# ---------------------
-def carregar_csv_github(url, colunas=None):
-    """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        df = pd.read_csv(StringIO(response.text))
-        if colunas is not None:
-            for c in colunas:
-                if c not in df.columns:
-                    df[c] = None
-            df = df[[c for c in colunas if c in df.columns]]
+    # Função para carregar CSV remoto
+    # ---------------------
+    def carregar_csv_github(url, colunas=None):
+        """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            df = pd.read_csv(StringIO(response.text))
+            if colunas is not None:
+                for c in colunas:
+                    if c not in df.columns:
+                        df[c] = None
+                df = df[[c for c in colunas if c in df.columns]]
+            return df
+        except Exception as e:
+            st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
+            return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
+
+    # ---------------------
+    # Utilitário para converter opções CSV em lista
+    # ---------------------
+    def _opcoes_para_lista(opcoes_str):
+        if pd.isna(opcoes_str) or not str(opcoes_str).strip():
+            return []
+        return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
+
+    # ---------------------
+    # Função para retornar definições de colunas extras filtrando por aplicação
+    # ---------------------
+    def col_defs_para(aplicacao: str):
+        df = st.session_state.campos
+        if df.empty:
+            return df
+        return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
+
+    # ---------------------
+    # Garante colunas extras conforme definições para a aplicação
+    # ---------------------
+    def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
+        defs = col_defs_para(aplicacao)
+        for campo in defs["Campo"].tolist():
+            if campo not in df.columns:
+                df[campo] = ""
         return df
-    except Exception as e:
-        st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
-        return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
 
-def baixar_csv(df, nome_arquivo):
-    csv = df.to_csv(index=False, encoding="utf-8-sig")
-    st.download_button(
-        f"⬇️ Baixar {nome_arquivo}",
-        data=csv,
-        file_name=nome_arquivo,
-        mime="text/csv"
-    )
-
-def _opcoes_para_lista(opcoes_str):
-    if pd.isna(opcoes_str) or not str(opcoes_str).strip():
-        return []
-    return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
-
-def col_defs_para(aplicacao: str):
-    """Retorna DataFrame de campos extras filtrando por aplicação."""
-    df = st.session_state.campos
-    if df.empty:
-        return df
-    return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
-
-def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
-    """Garante que o DataFrame tenha as colunas extras definidas para a aplicação."""
-    defs = col_defs_para(aplicacao)
-    for campo in defs["Campo"].tolist():
-        if campo not in df.columns:
-            df[campo] = ""
-    return df
-
-def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
-    """Renderiza o widget apropriado conforme o tipo de campo."""
-    if tipo == "Número":
-        valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
-        return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
-    elif tipo == "Seleção":
-        lista = _opcoes_para_lista(opcoes)
-        if not lista:
+    # ---------------------
+    # Renderiza input baseado no tipo de campo
+    # ---------------------
+    def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
+        if tipo == "Número":
+            valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
+            return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
+        elif tipo == "Seleção":
+            lista = _opcoes_para_lista(opcoes)
+            if not lista:
+                return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
+            if valor_padrao not in lista and valor_padrao not in (None, "", "nan"):
+                lista = [str(valor_padrao)] + [o for o in lista if o != valor_padrao]
+            return st.selectbox(label, options=lista, index=0 if valor_padrao in (None, "", "nan") else lista.index(str(valor_padrao)), key=key)
+        else:
             return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
-        if valor_padrao not in lista and valor_padrao not in (None, "", "nan"):
-            lista = [str(valor_padrao)] + [o for o in lista if o != valor_padrao]
-        return st.selectbox(label, options=lista, index=0 if valor_padrao in (None, "", "nan") else lista.index(str(valor_padrao)), key=key)
-    else:
-        return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
 
-# ===============================
-# Colunas base globais
-# ===============================
-INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
-PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
-COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
+    # ---------------------
+    # Carregamento inicial dos dados no estado da sessão
+    # ---------------------
+    if "insumos" not in st.session_state:
+        st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL, INSUMOS_BASE_COLS)
 
+    if "produtos" not in st.session_state:
+        st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL, PRODUTOS_BASE_COLS)
 
-# ===============================
-# Definições globais
-# ===============================
-URL_BASE = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/"
+    if "campos" not in st.session_state:
+        st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
 
-INSUMOS_CSV_URL = URL_BASE + "insumos_papelaria.csv"
-PRODUTOS_CSV_URL = URL_BASE + "produtos_papelaria.csv"
-CAMPOS_CSV_URL   = URL_BASE + "categorias_papelaria.csv"
+    # ---------------------
+    # Garante colunas base nos DataFrames
+    # ---------------------
+    for col in INSUMOS_BASE_COLS:
+        if col not in st.session_state.insumos.columns:
+            st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
 
-INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
-PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
-COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
+    for col in PRODUTOS_BASE_COLS:
+        if col not in st.session_state.produtos.columns:
+            if col in ["Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]:
+                st.session_state.produtos[col] = 0.0
+            else:
+                st.session_state.produtos[col] = ""
 
+    # ---------------------
+    # Garante colunas extras
+    # ---------------------
+    st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
+    st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
-# ---------------------
-# Estado da sessão
-# ---------------------
-if "insumos" not in st.session_state:
-    st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL)
+    # ---------------------
+    # Inicializa o hash dos produtos se não existir
+    # ---------------------
+    if "hash_produtos" not in st.session_state:
+        st.session_state.hash_produtos = hash_df(st.session_state.produtos)
 
-if "produtos" not in st.session_state:
-    st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL)
+    # ---------------------
+    # Verifica se houve alteração nos produtos para salvar automaticamente
+    # ---------------------
+    novo_hash = hash_df(st.session_state.produtos)
+    if novo_hash != st.session_state.hash_produtos:
+        salvar_csv_no_github(
+            GITHUB_TOKEN,
+            GITHUB_REPO,
+            "produtos_papelaria.csv",
+            st.session_state.produtos,
+            GITHUB_BRANCH,
+            mensagem="♻️ Alteração automática nos produtos"
+        )
+        st.session_state.hash_produtos = novo_hash
 
-if "campos" not in st.session_state:
-    st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
+    # Exemplo: Mostrar tabela dos produtos
+    st.write("### Produtos")
+    st.dataframe(st.session_state.produtos)
 
-# Garante colunas base nos DataFrames
-for col in INSUMOS_BASE_COLS:
-    if col not in st.session_state.insumos.columns:
-        st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
+# Rodar aba principal
+if __name__ == "__main__":
+    papelaria_aba()
 
-for col in PRODUTOS_BASE_COLS:
-    if col not in st.session_state.produtos.columns:
-        st.session_state.produtos[col] = "" if col not in ["Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"] else 0.0
-
-# Garante colunas extras
-st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
-st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
-
-
-# ---------------------
-# Inicializa o DataFrame produtos se não existir no session_state
-# ---------------------
-if "produtos" not in st.session_state:
-    # Inicialize aqui como preferir, por exemplo um DataFrame vazio:
-    import pandas as pd
-    st.session_state.produtos = pd.DataFrame()  # Ou carregue de algum lugar se for o caso
-
-# ---------------------
-# Inicializa o hash dos produtos se não existir
-# ---------------------
-if "hash_produtos" not in st.session_state:
-    st.session_state.hash_produtos = hash_df(st.session_state.produtos)
-
-# ---------------------
-# Verifica se houve alteração nos produtos para salvar automaticamente
-# ---------------------
-novo_hash = hash_df(st.session_state.produtos)
-if novo_hash != st.session_state.hash_produtos:
-    salvar_csv_no_github(
-        GITHUB_TOKEN,
-        GITHUB_REPO,
-        "produtos_papelaria.csv",
-        st.session_state.produtos,
-        GITHUB_BRANCH,
-        mensagem="♻️ Alteração automática nos produtos"
-    )
-    st.session_state.hash_produtos = novo_hash
 
 
 
@@ -1099,6 +1091,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
