@@ -200,47 +200,6 @@ with tab_manual:
             preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
             preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
-    st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
-    st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
-
-    with st.form("form_submit_manual"):
-        adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
-        if adicionar_produto:
-            if produto and quantidade > 0 and valor_pago >= 0:
-                imagem_bytes = None
-                if imagem_file is not None:
-                    imagem_bytes = imagem_file.read()
-                    imagens_dict[produto] = imagem_bytes
-
-                novo_produto = pd.DataFrame([{
-                    "Produto": produto,
-                    "Qtd": quantidade,
-                    "Custo Unitário": valor_pago,
-                    "Custos Extras Produto": custo_extra_produto,
-                    "Margem (%)": margem_manual,
-                    "Imagem": imagem_bytes
-                }])
-                st.session_state.produtos_manuais = pd.concat(
-                    [st.session_state.produtos_manuais, novo_produto],
-                    ignore_index=True
-                )
-                st.session_state.df_produtos_geral = processar_dataframe(
-                    st.session_state.produtos_manuais,
-                    frete_total,
-                    custos_extras,
-                    modo_margem,
-                    margem_fixa
-                )
-                st.success("✅ Produto adicionado!")
-            else:
-                st.warning("⚠️ Preencha todos os campos obrigatórios.")
-
-            if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-               exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-            else:
-               st.info("⚠️ Nenhum produto processado para exibir.")
-
-
         st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
         st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
 
@@ -251,7 +210,6 @@ with tab_manual:
                     imagem_bytes = None
                     if imagem_file is not None:
                         imagem_bytes = imagem_file.read()
-                        # registrar no dicionário para o PDF
                         imagens_dict[produto] = imagem_bytes
 
                     novo_produto = pd.DataFrame([{
@@ -266,7 +224,6 @@ with tab_manual:
                         [st.session_state.produtos_manuais, novo_produto],
                         ignore_index=True
                     )
-                    # recalcular df geral
                     st.session_state.df_produtos_geral = processar_dataframe(
                         st.session_state.produtos_manuais,
                         frete_total,
@@ -278,11 +235,12 @@ with tab_manual:
                 else:
                     st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
-        # se já houverem produtos manuais cadastrados, exibir resultados
-        if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-            exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-        else:
-            st.info("⚠️ Nenhum produto processado para exibir.")
+    # Exibir resultados após o formulário, fora do form para evitar erros
+    if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+        exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+    else:
+        st.info("⚠️ Nenhum produto processado para exibir.")
+
 
 
 # === Tab GitHub ===
@@ -302,6 +260,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
