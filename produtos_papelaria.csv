@@ -1,1 +1,2 @@
-Preço no Cartão,Produto,Custo Total,Margem (%),Insumos Usados,Preço à Vista
+Preço no Cartão,Custo Total,Produto,Margem (%),Insumos Usados,Preço à Vista
+0.0,0.0,rr,30.0,"[{'Insumo': 'wire o 5/4', 'Quantidade Usada': 0.0, 'Unidade': 'un', 'Preço Unitário (R$)': 1.5, 'Custo': 0.0}]",0.0
