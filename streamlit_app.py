@@ -49,12 +49,21 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
         return df
 
     df = df.copy()
+    # Acrescentar custos extras rateados ao custo unitário
+    rateio_unitario = 0
+    if frete_total > 0 or custos_extras > 0:
+        qtd_total = df["Qtd"].sum()
+        if qtd_total > 0:
+            rateio_unitario = (frete_total + custos_extras) / qtd_total
+
+    df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0) + rateio_unitario
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
     if modo_margem == "Margem fixa":
         df["Margem (%)"] = margem_fixa
 
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
+    # Considerando taxa do cartão como 11.28%, dividimos por 0.8872 para obter o preço no cartão
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
 
     return df
@@ -259,3 +268,4 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
