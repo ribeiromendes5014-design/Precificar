@@ -398,7 +398,7 @@ def papelaria_aba():
     # ---------------------
     # Config. de arquivos remotos (ajuste para o seu repositório real)
     # ---------------------
-    URL_BASE = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/"
+    URL_BASE = "https://github.com/ribeiromendes5014-design/Precificar/tree/main"
     INSUMOS_CSV_URL = URL_BASE + "insumos_papelaria.csv"
     PRODUTOS_CSV_URL = URL_BASE + "produtos_papelaria.csv"
     # Reaproveitado: este CSV agora armazena DEFINIÇÕES DE CAMPOS (não uma lista de categorias)
@@ -909,6 +909,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
