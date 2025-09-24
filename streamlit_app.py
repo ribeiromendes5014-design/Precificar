@@ -526,6 +526,14 @@ def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
     else:
         return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
 
+# ===============================
+# Colunas base globais
+# ===============================
+INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
+PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
+COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
+
+
 # ---------------------
 # Estado da sessão
 # ---------------------
@@ -1064,6 +1072,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
