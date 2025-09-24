@@ -389,11 +389,24 @@ from io import StringIO
 
 
 
+import base64
+import requests
+import pandas as pd
+from io import StringIO
+import streamlit as st
+
 # =====================================
-# Aba Papelaria (função completa, com campos dinâmicos)
+# Aba Papelaria (função completa, com campos dinâmicos e salvamento no GitHub)
 # =====================================
 def papelaria_aba():
     st.write("📚 Gerenciador Papelaria Personalizada")
+
+    # ---------------------
+    # Token e repositório GitHub
+    # ---------------------
+    GITHUB_TOKEN = st.secrets["github_token"]
+    GITHUB_REPO = "ribeiromendes5014-design/Precificar"
+    GITHUB_BRANCH = "main"
 
     # ---------------------
     # Configuração de arquivos remotos (ajuste para o seu repositório real)
@@ -411,7 +424,40 @@ def papelaria_aba():
     COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
 
     # ---------------------
-    # Utilitários
+    # Função para salvar no GitHub via API
+    # ---------------------
+    def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="Atualização via app"):
+        """Salva um DataFrame como CSV diretamente no GitHub."""
+        from requests import get, put
+
+        url = f"https://api.github.com/repos/{repo}/contents/{path}"
+        conteudo = dataframe.to_csv(index=False)
+        conteudo_b64 = base64.b64encode(conteudo.encode()).decode()
+        headers = {"Authorization": f"token {token}"}
+
+        # Obtém SHA do arquivo (necessário para atualizar)
+        r = get(url, headers=headers)
+        if r.status_code == 200:
+            sha = r.json().get("sha")
+        else:
+            sha = None
+
+        payload = {
+            "message": mensagem,
+            "content": conteudo_b64,
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+
+        r2 = put(url, headers=headers, json=payload)
+        if r2.status_code in (200, 201):
+            st.success(f"✅ Arquivo `{path}` atualizado no GitHub!")
+        else:
+            st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
+
+    # ---------------------
+    # Utilitários de manipulação
     # ---------------------
     def carregar_csv_github(url, colunas=None):
         """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
@@ -485,7 +531,7 @@ def papelaria_aba():
     if "campos" not in st.session_state:
         st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
 
-    # Garante colunas base nos dados
+    # Garante colunas base nos DataFrames
     for col in INSUMOS_BASE_COLS:
         if col not in st.session_state.insumos.columns:
             st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
@@ -499,7 +545,7 @@ def papelaria_aba():
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
     # ---------------------
-    # Abas
+    # Criação das abas
     # ---------------------
     aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
 
@@ -521,7 +567,6 @@ def papelaria_aba():
                 if not nome_campo.strip():
                     st.warning("Informe um nome de campo válido.")
                 else:
-                    # Evita duplicatas exatas (mesmo nome + aplicação)
                     ja_existe = (
                         (st.session_state.campos["Campo"].astype(str).str.lower() == nome_campo.strip().lower())
                         & (st.session_state.campos["Aplicação"] == aplicacao)
@@ -529,14 +574,17 @@ def papelaria_aba():
                     if ja_existe:
                         st.warning("Já existe um campo com esse nome para essa aplicação.")
                     else:
-                        nova_linha = {"Campo": nome_campo.strip(), "Aplicação": aplicacao, "Tipo": tipo, "Opções": opcoes}
+                        nova_linha = {
+                            "Campo": nome_campo.strip(),
+                            "Aplicação": aplicacao,
+                            "Tipo": tipo,
+                            "Opções": opcoes
+                        }
                         st.session_state.campos = pd.concat(
                             [st.session_state.campos, pd.DataFrame([nova_linha])],
                             ignore_index=True
                         )
-                        # Se "Ambos", nada impede — a regra é aplicada no uso.
                         st.success(f"Campo '{nome_campo}' adicionado para {aplicacao}!")
-                        # Garante a coluna imediatamente nas tabelas
                         if aplicacao in ("Insumos", "Ambos"):
                             if nome_campo not in st.session_state.insumos.columns:
                                 st.session_state.insumos[nome_campo] = ""
@@ -546,93 +594,73 @@ def papelaria_aba():
                         st.rerun()
 
         st.markdown("### Campos cadastrados")
-        # Visualização
         if st.session_state.campos.empty:
             st.info("Nenhum campo extra cadastrado ainda.")
         else:
             st.dataframe(st.session_state.campos, use_container_width=True)
 
-        # Editar/Excluir Campo
         if not st.session_state.campos.empty:
             st.divider()
             st.subheader("Editar ou Excluir campo")
-
-            # Monta rótulos amigáveis
             rotulos = [
                 f"{row.Campo}  ·  ({row.Aplicação})"
                 for _, row in st.session_state.campos.iterrows()
             ]
             escolha = st.selectbox("Escolha um campo", [""] + rotulos)
-
             if escolha:
                 idx = rotulos.index(escolha)
                 campo_atual = st.session_state.campos.iloc[idx]
-
                 acao_campo = st.radio(
                     "Ação",
                     ["Nenhuma", "Editar", "Excluir"],
                     horizontal=True,
                     key=f"acao_campo_{idx}"
                 )
-
                 if acao_campo == "Excluir":
                     if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
                         nome = campo_atual["Campo"]
                         aplic = campo_atual["Aplicação"]
-
-                        # Remove definição
                         st.session_state.campos = st.session_state.campos.drop(st.session_state.campos.index[idx]).reset_index(drop=True)
-
-                        # Remove coluna dos dados conforme aplicação
                         if aplic in ("Insumos", "Ambos"):
                             if nome in st.session_state.insumos.columns:
                                 st.session_state.insumos = st.session_state.insumos.drop(columns=[nome])
                         if aplic in ("Produtos", "Ambos"):
                             if nome in st.session_state.produtos.columns:
                                 st.session_state.produtos = st.session_state.produtos.drop(columns=[nome])
-
                         st.success(f"Campo '{nome}' removido de {aplic}!")
                         st.rerun()
-
                 if acao_campo == "Editar":
                     with st.form(f"form_edit_campo_{idx}"):
                         novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]))
                         nova_aplic = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], index=["Insumos","Produtos","Ambos"].index(campo_atual["Aplicação"]))
                         novo_tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], index=["Texto","Número","Seleção"].index(campo_atual["Tipo"]))
                         novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "")
-
                         salvar = st.form_submit_button("Salvar Alterações")
-
                         if salvar:
                             nome_antigo = campo_atual["Campo"]
                             aplic_antiga = campo_atual["Aplicação"]
-
-                            # Atualiza definição
                             st.session_state.campos.loc[st.session_state.campos.index[idx], ["Campo","Aplicação","Tipo","Opções"]] = [
                                 novo_nome, nova_aplic, novo_tipo, novas_opcoes
                             ]
-
-                            # Se renomeou, reflete nos DataFrames
                             renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
                             if renomeou:
                                 if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
                                     st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
                                 if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
                                     st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
-
-                            # Garante colunas existirem conforme nova aplicação
                             if nova_aplic in ("Insumos", "Ambos"):
                                 if novo_nome not in st.session_state.insumos.columns:
                                     st.session_state.insumos[novo_nome] = ""
                             if nova_aplic in ("Produtos", "Ambos"):
                                 if novo_nome not in st.session_state.produtos.columns:
                                     st.session_state.produtos[novo_nome] = ""
-
                             st.success("Campo atualizado!")
                             st.rerun()
 
         st.divider()
         baixar_csv(st.session_state.campos, "campos_papelaria.csv")
+        if st.button("📤 Salvar CAMPO no GitHub"):
+            salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "categorias_papelaria.csv", st.session_state.campos, GITHUB_BRANCH)
 
     # =====================================
     # Aba Insumos
@@ -640,18 +668,15 @@ def papelaria_aba():
     with aba_insumos:
         st.header("Insumos")
 
-        # Garante colunas extras atuais
         st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
         with st.form("form_add_insumo"):
             st.subheader("Adicionar novo insumo")
-
             nome_insumo = st.text_input("Nome do Insumo")
             categoria_insumo = st.text_input("Categoria")
             unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)")
             preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f")
 
-            # Campos extras
             extras_insumos = col_defs_para("Insumos")
             valores_extras = {}
             if not extras_insumos.empty:
@@ -677,10 +702,8 @@ def papelaria_aba():
                         "Unidade": unidade_insumo.strip(),
                         "Preço Unitário (R$)": float(preco_insumo),
                     }
-                    # Adiciona extras
                     for k, v in valores_extras.items():
                         novo[k] = v
-                    # Garante todas as colunas
                     todas_cols = list(dict.fromkeys(INSUMOS_BASE_COLS + extras_insumos["Campo"].tolist()))
                     st.session_state.insumos = st.session_state.insumos.reindex(columns=list(set(st.session_state.insumos.columns) | set(todas_cols)))
                     st.session_state.insumos = pd.concat([st.session_state.insumos, pd.DataFrame([novo])], ignore_index=True)
@@ -688,11 +711,9 @@ def papelaria_aba():
                     st.rerun()
 
         st.markdown("### Insumos cadastrados")
-        # Exibe reordenando: base + extras
         ordem_cols = INSUMOS_BASE_COLS + [c for c in st.session_state.insumos.columns if c not in INSUMOS_BASE_COLS]
         st.dataframe(st.session_state.insumos.reindex(columns=ordem_cols), use_container_width=True)
 
-        # Seleção para editar/excluir
         if not st.session_state.insumos.empty:
             insumo_selecionado = st.selectbox(
                 "Selecione um insumo",
@@ -709,7 +730,6 @@ def papelaria_aba():
                 key=f"acao_insumo_{insumo_selecionado}"
             )
 
-            # Localiza primeira ocorrência (simples)
             idxs = st.session_state.insumos.index[st.session_state.insumos["Nome"] == insumo_selecionado].tolist()
             idx = idxs[0] if idxs else None
 
@@ -730,7 +750,6 @@ def papelaria_aba():
                         value=float(atual.get("Preço Unitário (R$)", 0.0))
                     )
 
-                    # Edita extras
                     valores_extras_edit = {}
                     extras_insumos = col_defs_para("Insumos")
                     if not extras_insumos.empty:
@@ -758,22 +777,21 @@ def papelaria_aba():
                         st.rerun()
 
         baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
+        if st.button("📤 Salvar INSUMOS no GitHub"):
+            salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
-            # =====================================
+    # =====================================
     # Aba Produtos
     # =====================================
     with aba_produtos:
         st.header("Produtos")
 
-        # Garante colunas extras atuais
         st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
         with st.form("form_add_produto"):
             st.subheader("Adicionar novo produto")
-
             nome_produto = st.text_input("Nome do Produto")
 
-            # Seleção de insumos para compor o produto
             insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
             insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
 
@@ -813,7 +831,6 @@ def papelaria_aba():
             st.markdown(f"💸 **Preço à Vista Calculado:** R$ {preco_vista:,.2f}")
             st.markdown(f"💳 **Preço no Cartão Calculado:** R$ {preco_cartao:,.2f}")
 
-            # Campos extras
             extras_produtos = col_defs_para("Produtos")
             valores_extras_prod = {}
             if not extras_produtos.empty:
@@ -841,7 +858,7 @@ def papelaria_aba():
                         "Preço à Vista": float(preco_vista),
                         "Preço no Cartão": float(preco_cartao),
                         "Margem (%)": float(margem),
-                        "Insumos Usados": str(insumos_usados)  # salva como string
+                        "Insumos Usados": str(insumos_usados)
                     }
                     for k, v in valores_extras_prod.items():
                         novo[k] = v
@@ -861,7 +878,6 @@ def papelaria_aba():
         ordem_cols_p = PRODUTOS_BASE_COLS + ["Insumos Usados"] + [c for c in st.session_state.produtos.columns if c not in PRODUTOS_BASE_COLS + ["Insumos Usados"]]
         st.dataframe(st.session_state.produtos.reindex(columns=ordem_cols_p), use_container_width=True)
 
-        # Seleção para editar/excluir
         if not st.session_state.produtos.empty:
             produto_selecionado = st.selectbox(
                 "Selecione um produto",
@@ -893,7 +909,6 @@ def papelaria_aba():
                     novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")))
                     nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
 
-                    # Recarrega insumos usados do produto (se houver)
                     try:
                         import ast
                         insumos_atual = ast.literal_eval(atual_p.get("Insumos Usados", "[]"))
@@ -914,7 +929,6 @@ def papelaria_aba():
                         preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
                         unidade = str(dados_insumo.get("Unidade", ""))
 
-                        # tenta carregar quantidade já salva
                         qtd_default = 0.0
                         for item in insumos_atual:
                             if item.get("Insumo") == insumo:
@@ -946,7 +960,6 @@ def papelaria_aba():
                     st.markdown(f"💸 **Preço à Vista Recalculado:** R$ {novo_vista:,.2f}")
                     st.markdown(f"💳 **Preço no Cartão Recalculado:** R$ {novo_cartao:,.2f}")
 
-                    # Edita extras
                     valores_extras_edit_p = {}
                     extras_produtos = col_defs_para("Produtos")
                     if not extras_produtos.empty:
@@ -976,6 +989,9 @@ def papelaria_aba():
                         st.rerun()
 
         baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
+        if st.button("📤 Salvar PRODUTOS no GitHub"):
+            salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "produtos_papelaria.csv", st.session_state.produtos, GITHUB_BRANCH)
+
 
 
 
@@ -992,6 +1008,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
