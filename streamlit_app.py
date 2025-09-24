@@ -575,30 +575,34 @@ st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "
 
 
 # ---------------------
+# Inicializa o DataFrame produtos se não existir no session_state
+# ---------------------
+if "produtos" not in st.session_state:
+    # Inicialize aqui como preferir, por exemplo um DataFrame vazio:
+    import pandas as pd
+    st.session_state.produtos = pd.DataFrame()  # Ou carregue de algum lugar se for o caso
+
+# ---------------------
+# Inicializa o hash dos produtos se não existir
+# ---------------------
+if "hash_produtos" not in st.session_state:
+    st.session_state.hash_produtos = hash_df(st.session_state.produtos)
+
+# ---------------------
 # Verifica se houve alteração nos produtos para salvar automaticamente
 # ---------------------
+novo_hash = hash_df(st.session_state.produtos)
+if novo_hash != st.session_state.hash_produtos:
+    salvar_csv_no_github(
+        GITHUB_TOKEN,
+        GITHUB_REPO,
+        "produtos_papelaria.csv",
+        st.session_state.produtos,
+        GITHUB_BRANCH,
+        mensagem="♻️ Alteração automática nos produtos"
+    )
+    st.session_state.hash_produtos = novo_hash
 
-# Garante que o DataFrame 'produtos' está carregado no session_state antes de qualquer uso
-if "produtos" in st.session_state:
-
-    # Garante que o hash inicial foi calculado
-    if "hash_produtos" not in st.session_state:
-        st.session_state.hash_produtos = hash_df(st.session_state.produtos)
-
-    # Calcula novo hash para verificar alterações
-    novo_hash = hash_df(st.session_state.produtos)
-    
-    # Se houve mudança, salva no GitHub e atualiza o hash
-    if novo_hash != st.session_state.hash_produtos:
-        salvar_csv_no_github(
-            GITHUB_TOKEN,
-            GITHUB_REPO,
-            "produtos_papelaria.csv",
-            st.session_state.produtos,
-            GITHUB_BRANCH,
-            mensagem="♻️ Alteração automática nos produtos"
-        )
-        st.session_state.hash_produtos = novo_hash
 
 
 # ---------------------
@@ -1095,6 +1099,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
