@@ -51,34 +51,42 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
 import pandas as pd
 import streamlit as st
 
-def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
-                        modo_margem: str, margem_fixa: float) -> pd.DataFrame:
-    if df.empty:
-        return df
+def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
+    """Exibe os resultados de precificação com tabela e imagens dos produtos."""
+    if df is None or df.empty:
+        st.info("⚠️ Nenhum produto disponível para exibir.")
+        return
 
-    df = df.copy()
-    rateio_unitario = 0
-    if frete_total > 0 or custos_extras > 0:
-        qtd_total = df["Qtd"].sum()
-        if qtd_total > 0:
-            rateio_unitario = (frete_total + custos_extras) / qtd_total
+    st.subheader("📊 Resultados da Precificação")
 
-    df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0) + rateio_unitario
-    df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
+    for idx, row in df.iterrows():
+        with st.container():
+            cols = st.columns([1, 3])
+            with cols[0]:
+                img_bytes = imagens_dict.get(row.get("Produto"))
+                if img_bytes:
+                    st.image(img_bytes, width=100)
+                elif row.get("Imagem") is not None:
+                    try:
+                        st.image(row.get("Imagem"), width=100)
+                    except Exception:
+                        st.write("🖼️ N/A")
+            with cols[1]:
+                st.markdown(f"**{row.get('Produto', '—')}**")
+                st.write(f"📦 Quantidade: {row.get('Qtd', '—')}")
+                if "Custo Unitário" in df.columns:
+                    st.write(f"💰 Custo Unitário: R$ {row.get('Custo Unitário', 0):.2f}")
+                if "Custos Extras Produto" in df.columns:
+                    st.write(f"🛠 Custos Extras: R$ {row.get('Custos Extras Produto', 0):.2f}")
+                if "Margem (%)" in df.columns:
+                    st.write(f"📈 Margem: {row.get('Margem (%)', 0):.2f}%")
+                if "Preço à Vista" in df.columns:
+                    st.write(f"💸 Preço à Vista: R$ {row.get('Preço à Vista', 0):.2f}")
+                if "Preço no Cartão" in df.columns:
+                    st.write(f"💳 Preço no Cartão: R$ {row.get('Preço no Cartão', 0):.2f}")
 
-    if modo_margem == "Margem fixa":
-        df["Margem (%)"] = margem_fixa
-    elif modo_margem == "Margem por produto":
-        # Usar a margem do produto, preenchendo NaNs com o valor fixo (exemplo: 30%)
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
-    else:
-        # Segurança para outros casos, também preencher com fixo
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
-
-    df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
-    df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
-
-    return df
+    st.markdown("### 📋 Tabela Consolidada")
+    st.dataframe(df, use_container_width=True)
 
 # Streamlit app
 st.title("Teste de Precificação")
@@ -333,6 +341,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
