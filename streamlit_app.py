@@ -60,11 +60,11 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
     if modo_margem == "Margem fixa":
-    # Sobrescreve a margem com o valor fixo
-    df["Margem (%)"] = margem_fixa
-else:
-    # Caso não seja modo fixa, garante que a margem está preenchida
-    df["Margem (%)"] = df["Margem (%)"].fillna(0)
+        # Sobrescreve a margem com o valor fixo
+        df["Margem (%)"] = margem_fixa
+    else:
+        # Caso não seja modo fixa, garante que a margem está preenchida
+        df["Margem (%)"] = df["Margem (%)"].fillna(0)
 
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
     # Considerando taxa do cartão como 11.28%, dividimos por 0.8872 para obter o preço no cartão
@@ -307,6 +307,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
