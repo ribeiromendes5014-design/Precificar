@@ -122,8 +122,8 @@ if "rateio_manual" not in st.session_state:
 frete_total = 0.0
 custos_extras = 0.0
 # Estes valores são fixos e usados sempre, ignorando o input do usuário:
-modo_margem_global = "Margem fixa"
-margem_fixa_sidebar = 30.0
+mmodo_margem = st.selectbox("Modo de Margem", ["Margem fixa", "Margem por produto"])
+margem_fixa = st.number_input("Margem (%)", value=30.0, step=1.0)
 # URL do CSV do GitHub
 ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
 
@@ -324,6 +324,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
