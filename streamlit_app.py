@@ -231,10 +231,10 @@ with tab_manual:
             else:
                 st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
-    if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-    exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-else:
-    st.info("⚠️ Nenhum produto processado para exibir.")
+            if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+               exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+            else:
+               st.info("⚠️ Nenhum produto processado para exibir.")
 
 
         st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
@@ -295,6 +295,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
