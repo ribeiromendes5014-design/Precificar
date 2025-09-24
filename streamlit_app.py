@@ -325,6 +325,19 @@ with tab_github:
 
 
 
+# =====================================
+# Views principais
+# =====================================
+
+
+elif view == "precificação":
+    # Aqui você cola o código da aba Precificação que já implementou
+    st.write("⚙️ Precificação em construção...")
+
+elif view == "Papelaria":
+    papelaria_aba()
+
+
 
 
 
