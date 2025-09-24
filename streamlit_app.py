@@ -774,7 +774,7 @@ def papelaria_aba():
 
         baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
 
-    # =====================================
+        # =====================================
     # Aba Produtos
     # =====================================
     with aba_produtos:
@@ -787,10 +787,46 @@ def papelaria_aba():
             st.subheader("Adicionar novo produto")
 
             nome_produto = st.text_input("Nome do Produto")
-            custo_total = st.number_input("Custo Total (R$)", min_value=0.0, format="%.2f")
-            preco_vista = st.number_input("Preço à Vista (R$)", min_value=0.0, format="%.2f")
-            preco_cartao = st.number_input("Preço no Cartão (R$)", min_value=0.0, format="%.2f")
-            margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f")
+
+            # Seleção de insumos para compor o produto
+            insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
+            insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
+
+            insumos_usados = []
+            custo_total = 0.0
+
+            for insumo in insumos_selecionados:
+                dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
+                preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
+                unidade = str(dados_insumo.get("Unidade", ""))
+
+                qtd_usada = st.number_input(
+                    f"Quantidade usada de {insumo} ({unidade}) - Preço unitário R$ {preco_unit:.2f}",
+                    min_value=0.0,
+                    step=0.01,
+                    key=f"qtd_{insumo}"
+                )
+
+                custo_insumo = qtd_usada * preco_unit
+                custo_total += custo_insumo
+
+                insumos_usados.append({
+                    "Insumo": insumo,
+                    "Quantidade Usada": qtd_usada,
+                    "Unidade": unidade,
+                    "Preço Unitário (R$)": preco_unit,
+                    "Custo": custo_insumo
+                })
+
+            st.markdown(f"**Custo Total Calculado (Insumos): R$ {custo_total:,.2f}**")
+
+            margem = st.number_input("Margem de Lucro (%)", min_value=0.0, format="%.2f", value=30.0)
+
+            preco_vista = custo_total * (1 + margem / 100) if custo_total > 0 else 0.0
+            preco_cartao = preco_vista / 0.8872 if preco_vista > 0 else 0.0
+
+            st.markdown(f"💸 **Preço à Vista Calculado:** R$ {preco_vista:,.2f}")
+            st.markdown(f"💳 **Preço no Cartão Calculado:** R$ {preco_cartao:,.2f}")
 
             # Campos extras
             extras_produtos = col_defs_para("Produtos")
@@ -811,6 +847,8 @@ def papelaria_aba():
             if adicionou_prod:
                 if not nome_produto.strip():
                     st.warning("Informe o Nome do Produto.")
+                elif not insumos_usados:
+                    st.warning("Selecione ao menos um insumo para o produto.")
                 else:
                     novo = {
                         "Produto": nome_produto.strip(),
@@ -818,18 +856,24 @@ def papelaria_aba():
                         "Preço à Vista": float(preco_vista),
                         "Preço no Cartão": float(preco_cartao),
                         "Margem (%)": float(margem),
+                        "Insumos Usados": str(insumos_usados)  # salva como string JSON-like
                     }
                     for k, v in valores_extras_prod.items():
                         novo[k] = v
 
-                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS + extras_produtos["Campo"].tolist()))
-                    st.session_state.produtos = st.session_state.produtos.reindex(columns=list(set(st.session_state.produtos.columns) | set(todas_cols)))
-                    st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo])], ignore_index=True)
+                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
+                    st.session_state.produtos = st.session_state.produtos.reindex(
+                        columns=list(set(st.session_state.produtos.columns) | set(todas_cols))
+                    )
+                    st.session_state.produtos = pd.concat(
+                        [st.session_state.produtos, pd.DataFrame([novo])],
+                        ignore_index=True
+                    )
                     st.success(f"Produto '{nome_produto}' adicionado!")
                     st.rerun()
 
         st.markdown("### Produtos cadastrados")
-        ordem_cols_p = PRODUTOS_BASE_COLS + [c for c in st.session_state.produtos.columns if c not in PRODUTOS_BASE_COLS]
+        ordem_cols_p = PRODUTOS_BASE_COLS + ["Insumos Usados"] + [c for c in st.session_state.produtos.columns if c not in PRODUTOS_BASE_COLS + ["Insumos Usados"]]
         st.dataframe(st.session_state.produtos.reindex(columns=ordem_cols_p), use_container_width=True)
 
         # Seleção para editar/excluir
@@ -862,10 +906,15 @@ def papelaria_aba():
                 atual_p = st.session_state.produtos.loc[idx_p]
                 with st.form(f"form_edit_produto_{idx_p}"):
                     novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")))
-                    novo_custo = st.number_input("Custo Total (R$)", min_value=0.0, format="%.2f", value=float(atual_p.get("Custo Total", 0.0)))
-                    novo_vista = st.number_input("Preço à Vista (R$)", min_value=0.0, format="%.2f", value=float(atual_p.get("Preço à Vista", 0.0)))
-                    novo_cartao = st.number_input("Preço no Cartão (R$)", min_value=0.0, format="%.2f", value=float(atual_p.get("Preço no Cartão", 0.0)))
                     nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
+
+                    # Aqui poderíamos refazer a seleção de insumos, mas para simplificar mantém o custo total
+                    novo_custo = float(atual_p.get("Custo Total", 0.0))
+                    novo_vista = novo_custo * (1 + nova_margem / 100)
+                    novo_cartao = novo_vista / 0.8872
+
+                    st.markdown(f"💸 **Preço à Vista Recalculado:** R$ {novo_vista:,.2f}")
+                    st.markdown(f"💳 **Preço no Cartão Recalculado:** R$ {novo_cartao:,.2f}")
 
                     # Edita extras
                     valores_extras_edit_p = {}
@@ -901,6 +950,7 @@ def papelaria_aba():
 
 
 
+
 # Sidebar para seleção da aba
 pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelaria"])
 
@@ -910,6 +960,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
