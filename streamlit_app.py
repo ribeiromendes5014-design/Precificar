@@ -69,11 +69,11 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     if modo_margem == "Margem fixa":
         df["Margem (%)"] = margem_fixa
     elif modo_margem == "Margem por produto":
-        # Preencher NaNs com 0, ou você pode decidir não preencher e tratar depois
-        df["Margem (%)"] = df["Margem (%)"].fillna(0)
+        # Usar a margem do produto, preenchendo NaNs com o valor fixo (exemplo: 30%)
+        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
     else:
-        # segurança para casos inesperados
-        df["Margem (%)"] = df["Margem (%)"].fillna(0)
+        # Segurança para outros casos, também preencher com fixo
+        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
 
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
@@ -333,6 +333,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
