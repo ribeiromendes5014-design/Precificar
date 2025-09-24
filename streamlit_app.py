@@ -59,22 +59,60 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
         if qtd_total > 0:
             rateio_unitario = (frete_total + custos_extras) / qtd_total
 
-    df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0) + rateio_unitario
+    if "Custos Extras Produto" not in df.columns:
+        df["Custos Extras Produto"] = 0.0
+    else:
+        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0)
+
+    df["Custos Extras Produto"] += rateio_unitario
+
+    if "Custo Unitário" not in df.columns:
+        df["Custo Unitário"] = 0.0
+    else:
+        df["Custo Unitário"] = df["Custo Unitário"].fillna(0)
+
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
     if modo_margem == "Margem fixa":
         df["Margem (%)"] = margem_fixa
     elif modo_margem == "Margem por produto":
         # Usar a margem do produto, preenchendo NaNs com o valor fixo (exemplo: 30%)
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
+        if "Margem (%)" not in df.columns:
+            df["Margem (%)"] = margem_fixa
+        else:
+            df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
     else:
         # Segurança para outros casos, também preencher com fixo
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
+        if "Margem (%)" not in df.columns:
+            df["Margem (%)"] = margem_fixa
+        else:
+            df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
 
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
 
     return df
+
+
+def load_csv_github(url: str) -> pd.DataFrame:
+    try:
+        df = pd.read_csv(url)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar CSV do GitHub: {e}")
+        return pd.DataFrame()
+
+
+def extrair_produtos_pdf(pdf_file) -> list:
+    # Implementação fictícia, substitua pela sua função real de extração
+    # Retornar lista de dicionários com chaves: Produto, Qtd, Custo Unitário, Margem (%)
+    # Exemplo:
+    # return [
+    #     {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 30},
+    #     ...
+    # ]
+    st.warning("Função extrair_produtos_pdf ainda não implementada.")
+    return []
 
 
 # ===============================
@@ -87,14 +125,29 @@ if "produtos_manuais" not in st.session_state:
 if "rateio_manual" not in st.session_state:
     st.session_state["rateio_manual"] = 0.0
 
-frete_total = 0.0
-custos_extras = 0.0
-# Estes valores são fixos e usados sempre, ignorando o input do usuário:
+if "frete_manual" not in st.session_state:
+    st.session_state["frete_manual"] = 0.0
+if "extras_manual" not in st.session_state:
+    st.session_state["extras_manual"] = 0.0
+if "qtd_total_manual" not in st.session_state:
+    st.session_state["qtd_total_manual"] = 1
+
+# Valores padrão para margem
+if "modo_margem" not in st.session_state:
+    st.session_state["modo_margem"] = "Margem fixa"  # ou "Margem por produto"
+if "margem_fixa" not in st.session_state:
+    st.session_state["margem_fixa"] = 30.0
+
+# Inicializar variáveis para uso no processamento
+frete_total = st.session_state.get("frete_manual", 0.0)
+custos_extras = st.session_state.get("extras_manual", 0.0)
+modo_margem = st.session_state.get("modo_margem", "Margem fixa")
+margem_fixa = st.session_state.get("margem_fixa", 30.0)
 
 # URL do CSV do GitHub
 ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
 
-# dicionário para armazenar imagens em memória para PDF
+# Dicionário para armazenar imagens em memória para PDF ou manual
 imagens_dict = {}  # produto → imagem bytes
 
 # Criar as tabs
@@ -130,13 +183,11 @@ with tab_pdf:
                 else:
                     st.info("⚠️ Nenhum produto processado para exibir.")
 
-
         except Exception as e:
             st.error(f"❌ Erro ao processar o PDF: {e}")
     else:
         st.info("📄 Faça upload de um arquivo PDF para começar.")
         if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
-
             df_exemplo = load_csv_github(ARQ_CAIXAS)
             if not df_exemplo.empty:
                 df_exemplo["Custos Extras Produto"] = 0.0
@@ -162,7 +213,11 @@ with tab_manual:
         with col_r3:
             qtd_total_manual = st.number_input("📦 Quantidade Total de Produtos", min_value=1, step=1, key="qtd_total_manual")
 
-        rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
+        if qtd_total_manual > 0:
+            rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
+        else:
+            rateio_calculado = 0.0
+
         st.session_state["rateio_manual"] = round(rateio_calculado, 4)
         st.markdown(f"💰 **Rateio Unitário Calculado:** R$ {rateio_calculado:,.4f}")
 
@@ -170,7 +225,7 @@ with tab_manual:
         # Se flag de rerun estiver presente, dispara o rerun e limpa os campos
         if st.session_state.get("rerun_after_add"):
             del st.session_state["rerun_after_add"]
-            st.rerun()
+            st.experimental_rerun()
 
         st.subheader("Adicionar novo produto")
 
@@ -206,12 +261,6 @@ with tab_manual:
 
         st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
         st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
-
-        # Variáveis para processar_dataframe
-        frete_total = st.session_state.get("frete_total", 0.0)
-        custos_extras = st.session_state.get("custos_extras", 0.0)
-        modo_margem = st.session_state.get("modo_margem", "margem_padrao")
-        margem_fixa = st.session_state.get("margem_fixa", 30.0)
 
         with st.form("form_submit_manual"):
             adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
@@ -282,20 +331,13 @@ with tab_manual:
                 # Resetar variável para evitar loop infinito
                 st.session_state["produto_para_excluir"] = None
 
-                st.rerun()
+                st.experimental_rerun()
 
         # Exibir resultados após possíveis alterações, fora do form
         if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.info("⚠️ Nenhum produto processado para exibir.")
-
-
-
-
-
-
-
 
 # === Tab GitHub ===
 with tab_github:
@@ -314,43 +356,3 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
