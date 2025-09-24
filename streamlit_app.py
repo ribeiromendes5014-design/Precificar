@@ -774,7 +774,7 @@ def papelaria_aba():
 
         baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
 
-        # =====================================
+            # =====================================
     # Aba Produtos
     # =====================================
     with aba_produtos:
@@ -804,7 +804,7 @@ def papelaria_aba():
                     f"Quantidade usada de {insumo} ({unidade}) - Preço unitário R$ {preco_unit:.2f}",
                     min_value=0.0,
                     step=0.01,
-                    key=f"qtd_{insumo}"
+                    key=f"novo_qtd_{insumo}"
                 )
 
                 custo_insumo = qtd_usada * preco_unit
@@ -856,7 +856,7 @@ def papelaria_aba():
                         "Preço à Vista": float(preco_vista),
                         "Preço no Cartão": float(preco_cartao),
                         "Margem (%)": float(margem),
-                        "Insumos Usados": str(insumos_usados)  # salva como string JSON-like
+                        "Insumos Usados": str(insumos_usados)  # salva como string
                     }
                     for k, v in valores_extras_prod.items():
                         novo[k] = v
@@ -908,11 +908,56 @@ def papelaria_aba():
                     novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")))
                     nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
 
-                    # Aqui poderíamos refazer a seleção de insumos, mas para simplificar mantém o custo total
-                    novo_custo = float(atual_p.get("Custo Total", 0.0))
+                    # Recarrega insumos usados do produto (se houver)
+                    try:
+                        import ast
+                        insumos_atual = ast.literal_eval(atual_p.get("Insumos Usados", "[]"))
+                        if not isinstance(insumos_atual, list):
+                            insumos_atual = []
+                    except Exception:
+                        insumos_atual = []
+
+                    insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
+                    nomes_pre_selecionados = [i["Insumo"] for i in insumos_atual]
+                    insumos_editados = st.multiselect("Selecione os insumos usados", insumos_disponiveis, default=nomes_pre_selecionados)
+
+                    insumos_usados_edit = []
+                    novo_custo = 0.0
+
+                    for insumo in insumos_editados:
+                        dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
+                        preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
+                        unidade = str(dados_insumo.get("Unidade", ""))
+
+                        # tenta carregar quantidade já salva
+                        qtd_default = 0.0
+                        for item in insumos_atual:
+                            if item.get("Insumo") == insumo:
+                                qtd_default = float(item.get("Quantidade Usada", 0.0))
+
+                        qtd_usada = st.number_input(
+                            f"Quantidade usada de {insumo} ({unidade}) - Preço unitário R$ {preco_unit:.2f}",
+                            min_value=0.0,
+                            step=0.01,
+                            value=qtd_default,
+                            key=f"edit_qtd_{idx_p}_{insumo}"
+                        )
+
+                        custo_insumo = qtd_usada * preco_unit
+                        novo_custo += custo_insumo
+
+                        insumos_usados_edit.append({
+                            "Insumo": insumo,
+                            "Quantidade Usada": qtd_usada,
+                            "Unidade": unidade,
+                            "Preço Unitário (R$)": preco_unit,
+                            "Custo": custo_insumo
+                        })
+
                     novo_vista = novo_custo * (1 + nova_margem / 100)
                     novo_cartao = novo_vista / 0.8872
 
+                    st.markdown(f"**Novo custo calculado: R$ {novo_custo:,.2f}**")
                     st.markdown(f"💸 **Preço à Vista Recalculado:** R$ {novo_vista:,.2f}")
                     st.markdown(f"💳 **Preço no Cartão Recalculado:** R$ {novo_cartao:,.2f}")
 
@@ -939,12 +984,14 @@ def papelaria_aba():
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
                         st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
+                        st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
                         for k, v in valores_extras_edit_p.items():
                             st.session_state.produtos.loc[idx_p, k] = v
                         st.success("Produto atualizado!")
                         st.rerun()
 
         baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
+
 
 
 
@@ -960,6 +1007,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
