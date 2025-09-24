@@ -389,14 +389,15 @@ from io import StringIO
 
 
 
+import streamlit as st
+import pandas as pd
 import base64
 import requests
-import pandas as pd
 from io import StringIO
-import streamlit as st
+import hashlib
 
 # =====================================
-# Aba Papelaria (função completa, com campos dinâmicos e salvamento no GitHub)
+# Aba Papelaria (função completa, com campos dinâmicos e salvamento automático no GitHub)
 # =====================================
 def papelaria_aba():
     st.write("📚 Gerenciador Papelaria Personalizada")
@@ -455,6 +456,12 @@ def papelaria_aba():
             st.success(f"✅ Arquivo `{path}` atualizado no GitHub!")
         else:
             st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
+
+    # ---------------------
+    # Função para gerar hash do DataFrame
+    # ---------------------
+    def hash_df(df):
+        return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
     # ---------------------
     # Utilitários de manipulação
@@ -543,6 +550,25 @@ def papelaria_aba():
     # Garante colunas extras
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+
+    # ---------------------
+    # Verifica se houve alteração nos produtos para salvar automaticamente
+    # ---------------------
+    if "hash_produtos" not in st.session_state:
+        st.session_state.hash_produtos = hash_df(st.session_state.produtos)
+
+    novo_hash = hash_df(st.session_state.produtos)
+    if novo_hash != st.session_state.hash_produtos:
+        salvar_csv_no_github(
+            GITHUB_TOKEN,
+            GITHUB_REPO,
+            "produtos_papelaria.csv",
+            st.session_state.produtos,
+            GITHUB_BRANCH,
+            mensagem="♻️ Alteração automática nos produtos"
+        )
+        st.session_state.hash_produtos = novo_hash
+
 
     # ---------------------
     # Criação das abas
@@ -1008,6 +1034,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
