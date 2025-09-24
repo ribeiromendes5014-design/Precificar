@@ -243,6 +243,7 @@ with tab_manual:
                         margem_fixa
                     )
                     st.success("✅ Produto adicionado!")
+                    st.session_state["rerun_after_add"] = True  # ← Adiciona flag aqui
                 else:
                     st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
@@ -250,7 +251,6 @@ with tab_manual:
         st.subheader("Produtos cadastrados")
 
         # Exibir produtos com botão de exclusão
-
         produtos = st.session_state.produtos_manuais
 
         if produtos.empty:
@@ -297,6 +297,7 @@ with tab_manual:
 
 
 
+
 # === Tab GitHub ===
 with tab_github:
     st.markdown("---")
@@ -314,6 +315,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
