@@ -42,14 +42,15 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
     st.dataframe(df, use_container_width=True)
 
 
+import pandas as pd
+import streamlit as st
+
 def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
                         modo_margem: str, margem_fixa: float) -> pd.DataFrame:
-    """Processa dataframe para adicionar custos rateados e preços finais."""
     if df.empty:
         return df
 
     df = df.copy()
-    # Acrescentar custos extras rateados ao custo unitário
     rateio_unitario = 0
     if frete_total > 0 or custos_extras > 0:
         qtd_total = df["Qtd"].sum()
@@ -60,17 +61,33 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
     if modo_margem == "Margem fixa":
-        # Sobrescreve a margem com o valor fixo
         df["Margem (%)"] = margem_fixa
     else:
-        # Caso não seja modo fixa, garante que a margem está preenchida
         df["Margem (%)"] = df["Margem (%)"].fillna(0)
 
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
-    # Considerando taxa do cartão como 11.28%, dividimos por 0.8872 para obter o preço no cartão
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
 
     return df
+
+# Streamlit app
+st.title("Teste de Precificação")
+
+modo_margem = st.selectbox("Modo de Margem", ["Margem fixa", "Margem por produto"])
+margem_fixa = st.number_input("Margem (%)", value=30.0, step=1.0)
+
+df_teste = pd.DataFrame({
+    "Produto": ["rose"],
+    "Qtd": [1],
+    "Custo Unitário": [20.0],
+    "Custos Extras Produto": [0.0],
+    "Margem (%)": [None]
+})
+
+df_resultado = processar_dataframe(df_teste, frete_total=0.0, custos_extras=0.0,
+                                   modo_margem=modo_margem, margem_fixa=margem_fixa)
+
+st.dataframe(df_resultado)
 
 
 def extrair_produtos_pdf(pdf_file) -> list:
@@ -307,6 +324,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
