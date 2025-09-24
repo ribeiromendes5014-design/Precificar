@@ -17,15 +17,6 @@ def exibir_papelaria():
     st.write("Conteúdo da aba Papelaria aqui...")
     # Coloque o que quiser mostrar na aba Papelaria
 
-# Sidebar para seleção da aba
-pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelaria"])
-
-# Mostrar conteúdo com base na seleção
-if pagina == "Precificação":
-    exibir_precificacao()
-elif pagina == "Papelaria":
-    # exibir_papelaria()   # <-- esta é a antiga
-    papelaria_aba()         # <-- chame a versão completa
 
 
 
@@ -909,6 +900,15 @@ def papelaria_aba():
 
 
 
+# Sidebar para seleção da aba
+pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelaria"])
+
+# Mostrar conteúdo com base na seleção
+if pagina == "Precificação":
+    exibir_precificacao()
+elif pagina == "Papelaria":
+    # exibir_papelaria()   # <-- esta é a antiga
+    papelaria_aba()         # <-- chame a versão completa
 
 
 
