@@ -394,7 +394,7 @@ with tab_github:
 # Aba Papelaria (função completa, com campos dinâmicos)
 # =====================================
 def papelaria_aba():
-    st.title("📚 Gerenciador Papelaria Personalizada")
+    st.write("📚 Gerenciador Papelaria Personalizada")
 
     # ---------------------
     # Config. de arquivos remotos (ajuste para o seu repositório real)
@@ -896,6 +896,7 @@ def papelaria_aba():
                         st.rerun()
 
         baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
+
 
 
 
