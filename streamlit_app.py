@@ -76,16 +76,6 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
 
     return df
 
-# =====================================
-# Views principais
-# =====================================
-
-elif view == "precificação":
-    # Aqui você cola o código da aba Precificação que já implementou
-    st.write("⚙️ Precificação em construção...")
-
-elif view == "Papelaria":
-    papelaria_aba()
 
 # ===============================
 # Estado da sessão e variáveis fixas
@@ -324,6 +314,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
