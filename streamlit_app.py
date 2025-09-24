@@ -245,26 +245,40 @@ with tab_manual:
         st.subheader("Produtos cadastrados")
 
         # Exibir produtos com botão de exclusão
+
         produtos = st.session_state.produtos_manuais
 
         if produtos.empty:
             st.info("⚠️ Nenhum produto cadastrado.")
         else:
-            # Criar um botão de exclusão para cada produto
+            produto_para_excluir = None
+
             for i, row in produtos.iterrows():
                 cols = st.columns([4, 1])
                 with cols[0]:
                     st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário: R$ {row['Custo Unitário']:.2f}")
                 with cols[1]:
                     if st.button(f"❌ Excluir", key=f"excluir_{i}"):
-                        st.session_state.produtos_manuais = produtos.drop(i).reset_index(drop=True)
-                        st.experimental_rerun()
+                        produto_para_excluir = i
+
+            if produto_para_excluir is not None:
+                st.session_state.produtos_manuais = produtos.drop(produto_para_excluir).reset_index(drop=True)
+                # Atualizar df_produtos_geral também para refletir exclusão
+                st.session_state.df_produtos_geral = processar_dataframe(
+                    st.session_state.produtos_manuais,
+                    frete_total,
+                    custos_extras,
+                    modo_margem,
+                    margem_fixa
+                )
+                st.experimental_rerun()
 
         # Exibir resultados após possíveis alterações, fora do form
         if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.info("⚠️ Nenhum produto processado para exibir.")
+
 
 
 
@@ -287,6 +301,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
