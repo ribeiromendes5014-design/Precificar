@@ -48,83 +48,6 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
 
 
 
-import pandas as pd
-import streamlit as st
-
-def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
-    """Exibe os resultados de precificação com tabela e imagens dos produtos."""
-    if df is None or df.empty:
-        st.info("⚠️ Nenhum produto disponível para exibir.")
-        return
-
-    st.subheader("📊 Resultados da Precificação")
-
-    for idx, row in df.iterrows():
-        with st.container():
-            cols = st.columns([1, 3])
-            with cols[0]:
-                img_bytes = imagens_dict.get(row.get("Produto"))
-                if img_bytes:
-                    st.image(img_bytes, width=100)
-                elif row.get("Imagem") is not None:
-                    try:
-                        st.image(row.get("Imagem"), width=100)
-                    except Exception:
-                        st.write("🖼️ N/A")
-            with cols[1]:
-                st.markdown(f"**{row.get('Produto', '—')}**")
-                st.write(f"📦 Quantidade: {row.get('Qtd', '—')}")
-                if "Custo Unitário" in df.columns:
-                    st.write(f"💰 Custo Unitário: R$ {row.get('Custo Unitário', 0):.2f}")
-                if "Custos Extras Produto" in df.columns:
-                    st.write(f"🛠 Custos Extras: R$ {row.get('Custos Extras Produto', 0):.2f}")
-                if "Margem (%)" in df.columns:
-                    st.write(f"📈 Margem: {row.get('Margem (%)', 0):.2f}%")
-                if "Preço à Vista" in df.columns:
-                    st.write(f"💸 Preço à Vista: R$ {row.get('Preço à Vista', 0):.2f}")
-                if "Preço no Cartão" in df.columns:
-                    st.write(f"💳 Preço no Cartão: R$ {row.get('Preço no Cartão', 0):.2f}")
-
-    st.markdown("### 📋 Tabela Consolidada")
-    st.dataframe(df, use_container_width=True)
-
-# Streamlit app
-st.title("Teste de Precificação")
-
-modo_margem = st.selectbox("Modo de Margem", ["Margem fixa", "Margem por produto"])
-margem_fixa = st.number_input("Margem (%)", value=30.0, step=1.0)
-
-df_teste = pd.DataFrame({
-    "Produto": ["rose"],
-    "Qtd": [1],
-    "Custo Unitário": [20.0],
-    "Custos Extras Produto": [0.0],
-    "Margem (%)": [None]
-})
-
-df_resultado = processar_dataframe(df_teste, frete_total=0.0, custos_extras=0.0,
-                                   modo_margem=modo_margem, margem_fixa=margem_fixa)
-
-st.dataframe(df_resultado)
-
-
-def extrair_produtos_pdf(pdf_file) -> list:
-    """Simulação de extração de produtos de PDF (substitua pelo OCR real)."""
-    # Aqui você poderia usar PyPDF2, pdfplumber ou OCR.
-    # Por enquanto retorna um exemplo fixo.
-    return [
-        {"Produto": "Shampoo", "Qtd": 10, "Custo Unitário": 15.0},
-        {"Produto": "Condicionador", "Qtd": 8, "Custo Unitário": 18.0},
-    ]
-
-
-def load_csv_github(url: str) -> pd.DataFrame:
-    """Carrega CSV público do GitHub."""
-    try:
-        return pd.read_csv(url)
-    except Exception as e:
-        st.error(f"Erro ao carregar CSV do GitHub: {e}")
-        return pd.DataFrame()
 
 
 # ===============================
@@ -341,6 +264,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
