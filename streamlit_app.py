@@ -171,7 +171,7 @@ with tab_pdf:
                 df_exemplo["Imagem"] = None
                 st.session_state.produtos_manuais = df_exemplo.copy()
                 st.session_state.df_produtos_geral = processar_dataframe(
-                    df_exemplo, frete_total, custos_extras, modo_margem_global, margem_fixa_sidebar
+                    df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
                 )
                 exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
 
@@ -323,6 +323,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
