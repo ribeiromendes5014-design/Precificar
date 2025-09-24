@@ -167,8 +167,11 @@ with tab_manual:
         st.session_state["rateio_manual"] = round(rateio_calculado, 4)
         st.markdown(f"💰 **Rateio Unitário Calculado:** R$ {rateio_calculado:,.4f}")
 
-    with aba_prec_manual:
-        st.subheader("Adicionar novo produto")
+        with aba_prec_manual:
+        # Se flag de rerun estiver presente, dispara o rerun e limpa os campos
+        if st.session_state.get("rerun_after_add"):
+            del st.session_state["rerun_after_add"]
+            st.rerun()
 
         col1, col2 = st.columns(2)
         with col1:
@@ -309,6 +312,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
