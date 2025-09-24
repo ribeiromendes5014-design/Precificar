@@ -279,8 +279,11 @@ with tab_manual:
                     st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
         # se já houverem produtos manuais cadastrados, exibir resultados
-        if not st.session_state.produtos_manuais.empty:
+        if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+        else:
+            st.info("⚠️ Nenhum produto processado para exibir.")
+
 
 # === Tab GitHub ===
 with tab_github:
@@ -299,6 +302,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
