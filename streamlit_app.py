@@ -24,7 +24,8 @@ pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelari
 if pagina == "Precificação":
     exibir_precificacao()
 elif pagina == "Papelaria":
-    exibir_papelaria()
+    # exibir_papelaria()   # <-- esta é a antiga
+    papelaria_aba()         # <-- chame a versão completa
 
 
 
@@ -903,6 +904,7 @@ def papelaria_aba():
                         st.rerun()
 
         baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
+
 
 
 
