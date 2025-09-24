@@ -296,8 +296,8 @@ with tab_manual:
                         st.session_state.produtos_manuais,
                         frete_total,
                         custos_extras,
-                        modo_margem_global,
-                        margem_fixa_sidebar
+                        modo_margem,
+                        margem_fixa
                     )
                     st.success("✅ Produto adicionado!")
                 else:
@@ -324,6 +324,7 @@ with tab_github:
             exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
         else:
             st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+
 
 
 
