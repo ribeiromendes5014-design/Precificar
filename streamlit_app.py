@@ -570,21 +570,6 @@ def papelaria_aba():
         st.session_state.hash_produtos = novo_hash
 
 
-    def col_defs_para(aplicacao: str):
-    """Retorna DataFrame de campos extras filtrando por aplicação."""
-    df = st.session_state.campos
-    if df.empty:
-        return df
-    return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
-
-def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
-    """Garante que o DataFrame tenha as colunas extras definidas para a aplicação."""
-    defs = col_defs_para(aplicacao)
-    for campo in defs["Campo"].tolist():
-        if campo not in df.columns:
-            df[campo] = ""
-    return df
-
     
     # ---------------------
     # Criação das abas
@@ -704,7 +689,6 @@ def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
         if st.button("📤 Salvar CAMPO no GitHub"):
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "categorias_papelaria.csv", st.session_state.campos, GITHUB_BRANCH)
             # Criação das abas
-aba_insumos, aba_produtos = st.tabs(["🧮 Insumos", "📦 Produtos"])
 
     # =====================================
 # Aba Insumos
@@ -1072,6 +1056,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
