@@ -390,6 +390,13 @@ with tab_github:
 
 
 
+import streamlit as st
+import pandas as pd
+import requests
+from io import StringIO
+
+
+
 # =====================================
 # Aba Papelaria (função completa, com campos dinâmicos)
 # =====================================
@@ -896,6 +903,7 @@ def papelaria_aba():
                         st.rerun()
 
         baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
+
 
 
 
