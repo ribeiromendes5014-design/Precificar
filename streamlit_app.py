@@ -470,32 +470,38 @@ def papelaria_aba():
         else:
             st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
 
-    # ---------------------
-    # Função para gerar hash do DataFrame
-    # ---------------------
-    def hash_df(df):
-        return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+    import hashlib
+import pandas as pd
+import requests
+from io import StringIO
+import streamlit as st
 
-    # ---------------------
-    # Utilitários de manipulação
-    # ---------------------
-    def carregar_csv_github(url, colunas=None):
-        """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            df = pd.read_csv(StringIO(response.text))
-            if colunas is not None:
-                for c in colunas:
-                    if c not in df.columns:
-                        df[c] = None
-                df = df[[c for c in colunas if c in df.columns]]
-            return df
-        except Exception as e:
-            st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
-            return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
+# ---------------------
+# Função para gerar hash do DataFrame
+# ---------------------
+def hash_df(df):
+    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
-    def baixar_csv(df, nome_arquivo):
+# ---------------------
+# Utilitários de manipulação
+# ---------------------
+def carregar_csv_github(url, colunas=None):
+    """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        df = pd.read_csv(StringIO(response.text))
+        if colunas is not None:
+            for c in colunas:
+                if c not in df.columns:
+                    df[c] = None
+            df = df[[c for c in colunas if c in df.columns]]
+        return df
+    except Exception as e:
+        st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
+        return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
+
+def baixar_csv(df, nome_arquivo):
     csv = df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
         f"⬇️ Baixar {nome_arquivo}",
@@ -538,6 +544,7 @@ def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
         return st.selectbox(label, options=lista, index=0 if valor_padrao in (None, "", "nan") else lista.index(str(valor_padrao)), key=key)
     else:
         return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
+
 
 
     # ---------------------
@@ -1115,6 +1122,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
