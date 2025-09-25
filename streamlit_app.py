@@ -933,12 +933,11 @@ def papelaria_aba():
         if st.button("📤 Salvar INSUMOS no GitHub"):
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
-    # =====================================
+    ## =====================================
 # Aba Produtos
 # =====================================
 with aba_produtos:
-
-    st.header("Produtos")
+st.header("Produtos")
 
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
@@ -1199,6 +1198,7 @@ if pagina == "Precificação":
 st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
 papelaria_aba()
+
 
 
 
