@@ -696,7 +696,15 @@ def papelaria_aba():
         st.session_state.hash_produtos = novo_hash
 
 
-    
+    # Inicialização das variáveis no session_state
+if "campos" not in st.session_state:
+    st.session_state.campos = pd.DataFrame(columns=["Campo", "Aplicação", "Tipo", "Opções"])
+
+if "insumos" not in st.session_state:
+    st.session_state.insumos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
+
+if "produtos" not in st.session_state:
+    st.session_state.produtos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
     # ---------------------
 # Criação das abas
 # ---------------------
@@ -1212,6 +1220,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
