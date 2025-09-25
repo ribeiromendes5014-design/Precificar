@@ -1226,14 +1226,7 @@ with aba_produtos:
                         st.success("Produto atualizado!")
                         st.rerun()
 
-        if st.button("📤 Salvar PRODUTOS no GitHub"):
-    salvar_csv_no_github(
-        GITHUB_TOKEN,
-        GITHUB_REPO,
-        "produtos_papelaria.csv",
-        st.session_state.produtos,
-        GITHUB_BRANCH
-    )
+        
 
         baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
         if st.button("📤 Salvar PRODUTOS no GitHub"):
@@ -1251,6 +1244,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
