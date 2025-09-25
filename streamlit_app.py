@@ -920,7 +920,6 @@ def main():
     if "insumos" not in st.session_state:
         st.session_state.insumos = pd.DataFrame(columns=["Nome", "Preço Unitário (R$)", "Unidade"])
 
-    aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
 
     with aba_produtos:
         st.header("Produtos")
@@ -1194,6 +1193,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
