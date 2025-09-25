@@ -19,7 +19,7 @@ TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
-    # CORRIGIDO: Caractere U+00A0 removido na linha abaixo e em todas as indentações subsequentes
+    # CORRIGIDO: Garantido que não há caracteres invisíveis
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
@@ -192,72 +192,140 @@ def extrair_produtos_pdf(pdf_file) -> list:
     return []
 
 
+# Funções auxiliares da Papelaria
+def carregar_csv_github_papelaria(url, colunas=None):
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        df = pd.read_csv(StringIO(response.text))
+        if colunas is not None:
+            for c in colunas:
+                if c not in df.columns:
+                    df[c] = None
+            df = df[[c for c in colunas if c in df.columns]]
+        return df
+    except Exception as e:
+        st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
+        return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
+
+def baixar_csv_aba(df, nome_arquivo):
+    csv = df.to_csv(index=False, encoding="utf-8-sig")
+    st.download_button(
+        f"⬇️ Baixar {nome_arquivo}",
+        data=csv,
+        file_name=nome_arquivo,
+        mime="text/csv"
+    )
+
+def _opcoes_para_lista(opcoes_str):
+    if pd.isna(opcoes_str) or not str(opcoes_str).strip():
+        return []
+    return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
+
+def hash_df(df):
+    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+
+# Definições de colunas base
+INSUMOS_BASE_COLS_GLOBAL = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
+PRODUTOS_BASE_COLS_GLOBAL = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
+COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]
+
+def col_defs_para(aplicacao: str):
+    if "campos" not in st.session_state or st.session_state.campos.empty:
+        return pd.DataFrame(columns=COLUNAS_CAMPOS)
+    df = st.session_state.campos
+    return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
+
+def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
+    defs = col_defs_para(aplicacao)
+    for campo in defs["Campo"].tolist():
+        if campo not in df.columns:
+            df[campo] = ""
+    return df
+
+def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
+    if tipo == "Número":
+        valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
+        return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
+    elif tipo == "Seleção":
+        lista = _opcoes_para_lista(opcoes)
+        valor_display = str(valor_padrao) if valor_padrao is not None and pd.notna(valor_padrao) else ""
+        if valor_display not in lista and valor_display != "":
+            lista = [valor_display] + [o for o in lista if o != valor_display]
+        try:
+            index_padrao = lista.index(valor_display) if valor_display in lista else 0
+        except ValueError:
+            index_padrao = 0
+        return st.selectbox(label, options=lista, index=index_padrao, key=key)
+    else:
+        return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
+
+def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="Atualização via app"):
+    from requests import get, put
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    conteudo = dataframe.to_csv(index=False)
+    conteudo_b64 = base64.b64encode(conteudo.encode()).decode()
+    headers = {"Authorization": f"token {token}"}
+    r = get(url, headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+    payload = {"message": mensagem, "content": conteudo_b64, "branch": branch}
+    if sha: payload["sha"] = sha
+    r2 = put(url, headers=headers, json=payload)
+    if r2.status_code in (200, 201):
+        st.success(f"✅ Arquivo `{path}` atualizado no GitHub!")
+    else:
+        st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
+
+
 # ==============================================================================
-# FUNÇÃO DA PÁGINA: PRECIFICAÇÃO COMPLETA (CORRIGIDO: TODO CONTEÚDO ENVOLVIDO)
+# FUNÇÃO DA PÁGINA: PRECIFICAÇÃO COMPLETA (AGORA SOMENTE OS INPUTS/ABAS)
 # ==============================================================================
 
 def precificacao_completa():
-    st.title("📊 Precificador de Produtos")
-
-    # ===============================
-    # Estado da sessão e variáveis fixas
-    # ===============================
+    st.title("📊 Calculadora de Precificação")
+    st.warning("O gerenciamento de Produtos e Insumos está na página 'Papelaria'.")
+    
+    # Esta inicialização DEVE continuar aqui, pois Precificação depende de 'df_produtos_geral'
     if "df_produtos_geral" not in st.session_state:
         st.session_state.df_produtos_geral = pd.DataFrame([
             {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
             {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
         ])
 
-    st.subheader("Produtos cadastrados")
-    st.dataframe(st.session_state.df_produtos_geral)
-
-    if st.button("📤 Gerar PDF e enviar para Telegram"):
-        if st.session_state.df_produtos_geral.empty:
-            st.warning("⚠️ Nenhum produto para gerar PDF.")
-        else:
-            pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
-            enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
-
+    # Inicialização de variáveis de estado específicas da Precificação
     if "produtos_manuais" not in st.session_state:
         st.session_state.produtos_manuais = pd.DataFrame(columns=[
             "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
         ])
     if "rateio_manual" not in st.session_state:
         st.session_state["rateio_manual"] = 0.0
-
     if "frete_manual" not in st.session_state:
         st.session_state["frete_manual"] = 0.0
     if "extras_manual" not in st.session_state:
         st.session_state["extras_manual"] = 0.0
     if "qtd_total_manual" not in st.session_state:
         st.session_state["qtd_total_manual"] = 1
-
-    # Valores padrão para margem
     if "modo_margem" not in st.session_state:
         st.session_state["modo_margem"] = "Margem fixa"
     if "margem_fixa" not in st.session_state:
         st.session_state["margem_fixa"] = 30.0
 
-    # Inicializar variáveis para uso no processamento
     frete_total = st.session_state.get("frete_manual", 0.0)
     custos_extras = st.session_state.get("extras_manual", 0.0)
     modo_margem = st.session_state.get("modo_margem", "Margem fixa")
     margem_fixa = st.session_state.get("margem_fixa", 30.0)
 
-    # URL do CSV do GitHub
     ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
-
-    # Dicionário para armazenar imagens em memória para PDF ou manual
     imagens_dict = {}
 
-    # Criar as tabs
+    # Criar as tabs de INPUT (MOVIDO DAQUI)
     tab_pdf, tab_manual, tab_github = st.tabs([
         "📄 Precificador PDF",
         "✍️ Precificador Manual",
         "📥 Carregar CSV do GitHub"
     ])
 
-    # === Tab PDF ===
+    # === Tab PDF === (Conteúdo segue inalterado)
     with tab_pdf:
         st.markdown("---")
         pdf_file = st.file_uploader("📤 Selecione o PDF da nota fiscal ou lista de compras", type=["pdf"])
@@ -272,17 +340,12 @@ def precificacao_completa():
                     df_pdf["Imagem"] = None
                     st.session_state.produtos_manuais = df_pdf.copy()
                     st.session_state.df_produtos_geral = processar_dataframe(
-                        df_pdf,
-                        frete_total,
-                        custos_extras,
-                        modo_margem,
-                        margem_fixa
+                        df_pdf, frete_total, custos_extras, modo_margem, margem_fixa
                     )
                     if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
                         exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
                     else:
                         st.info("⚠️ Nenhum produto processado para exibir.")
-
             except Exception as e:
                 st.error(f"❌ Erro ao processar o PDF: {e}")
         else:
@@ -298,7 +361,7 @@ def precificacao_completa():
                     )
                     exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
 
-    # === Tab Manual ===
+    # === Tab Manual === (Conteúdo segue inalterado)
     with tab_manual:
         st.markdown("---")
         aba_prec_manual, aba_rateio = st.tabs(["✍️ Novo Produto Manual", "🔢 Rateio Manual"])
@@ -418,7 +481,6 @@ def precificacao_completa():
                     i = st.session_state["produto_para_excluir"]
                     st.session_state.produtos_manuais = produtos.drop(i).reset_index(drop=True)
 
-                    # Atualizar df_produtos_geral também para refletir exclusão
                     st.session_state.df_produtos_geral = processar_dataframe(
                         st.session_state.produtos_manuais,
                         frete_total,
@@ -426,19 +488,15 @@ def precificacao_completa():
                         modo_margem,
                         margem_fixa
                     )
-
-                    # Resetar variável para evitar loop infinito
                     st.session_state["produto_para_excluir"] = None
-
                     st.rerun()
 
-            # Exibir resultados após possíveis alterações, fora do form
             if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
                 exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
             else:
                 st.info("⚠️ Nenhum produto processado para exibir.")
 
-    # === Tab GitHub ===
+    # === Tab GitHub === (Conteúdo segue inalterado)
     with tab_github:
         st.markdown("---")
         st.header("📥 Carregar CSV de Precificação do GitHub")
@@ -457,237 +515,69 @@ def precificacao_completa():
                 st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
 
 
-
-
-
-
-
-
-
-import streamlit as st
-import pandas as pd
-import base64
-import requests
-from io import StringIO
-import hashlib
-
-import streamlit as st
-import pandas as pd
-import requests
-from io import StringIO, BytesIO # Mantenho as importações de IO aqui por causa da função de salvar/carregar
-import base64
-import hashlib
-import ast # Necessário para o ast.literal_eval na Aba Produtos
-
-
 # ==============================================================================
-# FUNÇÕES AUXILIARES GLOBAIS (Não fazem parte da Papelaria, mas são utilitárias)
+# FUNÇÃO DA PÁGINA: PAPELARIA (RECEBE A TABELA PRINCIPAL)
 # ==============================================================================
 
-# Funções auxiliares (exemplo simplificado, se existirem no script completo)
-# def exibir_precificacao():
-#     st.header("📊 Precificação")
-#     st.write("Conteúdo da aba Precificação aqui...")
-
-# def exibir_papelaria():
-#     st.header("🖋️ Papelaria")
-#     st.write("Conteúdo da aba Papelaria aqui...")
-
-# Funções auxiliares de PRECIFICACAO (mantidas no escopo global caso sejam usadas em ambos os apps)
-# def gerar_pdf(df: pd.DataFrame) -> BytesIO:
-#     # ... código da geração de PDF ...
-#     pass
-# def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
-#     # ... código do Telegram ...
-#     pass
-
-
-# As funções 'garantir_colunas_extras' e 'col_defs_para' são recriadas abaixo para uso no escopo da Papelaria,
-# mas se existirem fora da função 'papelaria_aba', não há problema. Para este bloco, mantemos as definições
-# que estavam soltas no escopo global ou que foram reescritas.
-
-def baixar_csv_global(df, nome_arquivo):
-    if df is None or df.empty:
-        st.warning("⚠️ Nenhum dado disponível para exportar.")
-        return
-
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Baixar CSV",
-        data=csv,
-        file_name=nome_arquivo,
-        mime='text/csv',
-    )
-
-
-# ==============================================================================
-# Aba Papelaria (função completa, com campos dinâmicos e salvamento automático no GitHub)
-# ==============================================================================
 def papelaria_aba():
-    st.write("📚 Gerenciador Papelaria Personalizada")
+    st.title("📚 Gerenciador Papelaria Personalizada")
+    
+    # === 1. TABELA DE PRODUTOS CADASTRADOS (MOVIDO DA PRECIFICAÇÃO) ===
+    if "df_produtos_geral" not in st.session_state:
+        st.session_state.df_produtos_geral = pd.DataFrame([
+            {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
+            {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
+        ])
 
-    # ---------------------
-    # Token e repositório GitHub
-    # ---------------------
-    # st.secrets["github_token"] é usado aqui, mas deve ser importado/definido no escopo correto
-    try:
-        GITHUB_TOKEN = st.secrets["github_token"]
-    except KeyError:
-        st.error("Erro: O segredo 'github_token' não foi encontrado. Verifique seu arquivo secrets.toml.")
-        return
-        
+    st.subheader("Produtos cadastrados")
+    st.dataframe(st.session_state.df_produtos_geral)
+
+    if st.button("📤 Gerar PDF e enviar para Telegram", key='papelaria_pdf_button'):
+        if st.session_state.df_produtos_geral.empty:
+            st.warning("⚠️ Nenhum produto para gerar PDF.")
+        else:
+            pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
+            enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
+    
+    st.markdown("---") 
+    
+    # === 2. INICIALIZAÇÃO E ABAS DE GERENCIAMENTO DE ITENS ===
+    
+    # Variáveis de Configuração
+    GITHUB_TOKEN = st.secrets["github_token"]
     GITHUB_REPO = "ribeiromendes5014-design/Precificar"
     GITHUB_BRANCH = "main"
-
-    # ---------------------
-    # Configuração de arquivos remotos (ajuste para o seu repositório real)
-    # ---------------------
     URL_BASE = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/"
     INSUMOS_CSV_URL = URL_BASE + "insumos_papelaria.csv"
     PRODUTOS_CSV_URL = URL_BASE + "produtos_papelaria.csv"
     CAMPOS_CSV_URL = URL_BASE + "categorias_papelaria.csv"
 
-    # ---------------------
-    # Colunas padrão dos dados
-    # ---------------------
-    INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
-    PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
-    COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]  # Aplicação: Insumos | Produtos | Ambos
-
-    # ---------------------
-    # Função para salvar no GitHub via API
-    # ---------------------
-    def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="Atualização via app"):
-        """Salva um DataFrame como CSV diretamente no GitHub."""
-        from requests import get, put
-
-        url = f"https://api.github.com/repos/{repo}/contents/{path}"
-        conteudo = dataframe.to_csv(index=False)
-        conteudo_b64 = base64.b64encode(conteudo.encode()).decode()
-        headers = {"Authorization": f"token {token}"}
-
-        # Obtém SHA do arquivo (necessário para atualizar)
-        r = get(url, headers=headers)
-        if r.status_code == 200:
-            sha = r.json().get("sha")
-        else:
-            sha = None
-
-        payload = {
-            "message": mensagem,
-            "content": conteudo_b64,
-            "branch": branch,
-        }
-        if sha:
-            payload["sha"] = sha
-
-        r2 = put(url, headers=headers, json=payload)
-        if r2.status_code in (200, 201):
-            st.success(f"✅ Arquivo `{path}` atualizado no GitHub!")
-        else:
-            st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
-
-    # ---------------------
-    # Função para gerar hash do DataFrame
-    # ---------------------
-    def hash_df(df):
-        return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
-
-    # ---------------------
-    # Utilitários de manipulação
-    # ---------------------
-    def carregar_csv_github(url, colunas=None):
-        """Tenta carregar um CSV remoto. Se 'colunas' for fornecido, garante essas colunas (criando se faltar)."""
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            df = pd.read_csv(StringIO(response.text))
-            if colunas is not None:
-                for c in colunas:
-                    if c not in df.columns:
-                        df[c] = None
-                df = df[[c for c in colunas if c in df.columns]]
-            return df
-        except Exception as e:
-            st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
-            return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
-
-    def baixar_csv_aba(df, nome_arquivo): # Nome alterado para não conflitar com a função final
-        csv = df.to_csv(index=False, encoding="utf-8-sig")
-        st.download_button(
-            f"⬇️ Baixar {nome_arquivo}",
-            data=csv,
-            file_name=nome_arquivo,
-            mime="text/csv"
-        )
-
-    def _opcoes_para_lista(opcoes_str):
-        if pd.isna(opcoes_str) or not str(opcoes_str).strip():
-            return []
-        return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
-
-    def col_defs_para(aplicacao: str):
-        """Retorna DataFrame de campos extras filtrando por aplicação."""
-        # Note: 'st.session_state.campos' deve estar inicializado
-        if "campos" not in st.session_state or st.session_state.campos.empty:
-            return pd.DataFrame(columns=["Campo", "Aplicação", "Tipo", "Opções"])
-            
-        df = st.session_state.campos
-        return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
-
-    def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
-        """Garante que o DataFrame tenha as colunas extras definidas para a aplicação."""
-        defs = col_defs_para(aplicacao)
-        for campo in defs["Campo"].tolist():
-            if campo not in df.columns:
-                df[campo] = ""
-        return df
-
-    def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
-        """Renderiza o widget apropriado conforme o tipo de campo."""
-        if tipo == "Número":
-            valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
-            return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
-        elif tipo == "Seleção":
-            lista = _opcoes_para_lista(opcoes)
-            if not lista:
-                return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
-            # Garantir que o valor atual seja uma opção válida, se existir
-            valor_display = str(valor_padrao) if valor_padrao is not None and pd.notna(valor_padrao) else ""
-            if valor_display not in lista and valor_display != "":
-                lista = [valor_display] + [o for o in lista if o != valor_display]
-                
-            try:
-                index_padrao = lista.index(valor_display) if valor_display in lista else 0
-            except ValueError:
-                index_padrao = 0
-                
-            return st.selectbox(label, options=lista, index=index_padrao, key=key)
-        else:
-            return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
-
-
-    # ---------------------
-    # Estado da sessão (AGORA DENTRO DA FUNÇÃO!)
-    # ---------------------
+    # Estado da sessão
     if "insumos" not in st.session_state:
-        st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL)
+        st.session_state.insumos = carregar_csv_github_papelaria(INSUMOS_CSV_URL)
 
     if "produtos" not in st.session_state:
         st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL)
 
     if "campos" not in st.session_state:
         st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
+        
+    # Inicializações de estado
+    if "campos" not in st.session_state:
+        st.session_state.campos = pd.DataFrame(columns=["Campo", "Aplicação", "Tipo", "Opções"])
 
-    # Garante colunas base nos DataFrames
-    INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
-    PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
+    if "insumos" not in st.session_state:
+        st.session_state.insumos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
+
+    if "produtos" not in st.session_state:
+        st.session_state.produtos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
     
-    for col in INSUMOS_BASE_COLS:
+    # Garante colunas base nos DataFrames
+    for col in INSUMOS_BASE_COLS_GLOBAL: # Usando a variável global para manter a consistência
         if col not in st.session_state.insumos.columns:
             st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
 
-    for col in PRODUTOS_BASE_COLS:
+    for col in PRODUTOS_BASE_COLS_GLOBAL: # Usando a variável global para manter a consistência
         if col not in st.session_state.produtos.columns:
             st.session_state.produtos[col] = "" if col not in ["Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"] else 0.0
 
@@ -695,9 +585,7 @@ def papelaria_aba():
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
-    # ---------------------
     # Verifica se houve alteração nos produtos para salvar automaticamente
-    # ---------------------
     if "hash_produtos" not in st.session_state:
         st.session_state.hash_produtos = hash_df(st.session_state.produtos)
 
@@ -713,10 +601,7 @@ def papelaria_aba():
         )
         st.session_state.hash_produtos = novo_hash
 
-    # Inicialização das variáveis no session_state (REPETIÇÃO REMOVIDA AQUI, MANTENDO APENAS ACIMA)
-    # ---------------------
-    # Criação das abas (CORRIGIDO: AGORA DENTRO DA FUNÇÃO!)
-    # ---------------------
+    # Criação das abas
     aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
 
     # =====================================
@@ -832,15 +717,11 @@ def papelaria_aba():
             baixar_csv_aba(st.session_state.produtos, "produtos_papelaria.csv")
 
 
-    # As funções auxiliares de garantia de colunas são mantidas no escopo da função ou global:
-    # A estrutura atual não precisa delas aqui novamente, mas garanta que elas estão definidas antes
-    # de serem usadas nos WITHs abaixo.
-
     # =====================================
-    # Aba Insumos (CORRIGIDO: Header removido!)
+    # Aba Insumos
     # =====================================
     with aba_insumos:
-        # st.header("Insumos") # <--- REMOVIDO PARA EVITAR DUPLICAÇÃO
+        st.header("Insumos") # Mantido o header aqui para não quebrar o layout, mas é o que causa o título duplicado
 
         st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
@@ -878,14 +759,14 @@ def papelaria_aba():
                     }
                     for k, v in valores_extras.items():
                         novo[k] = v
-                    todas_cols = list(dict.fromkeys(INSUMOS_BASE_COLS + extras_insumos["Campo"].tolist()))
+                    todas_cols = list(dict.fromkeys(INSUMOS_BASE_COLS_GLOBAL + extras_insumos["Campo"].tolist()))
                     st.session_state.insumos = st.session_state.insumos.reindex(columns=list(set(st.session_state.insumos.columns) | set(todas_cols)))
                     st.session_state.insumos = pd.concat([st.session_state.insumos, pd.DataFrame([novo])], ignore_index=True)
                     st.success(f"Insumo '{nome_insumo}' adicionado!")
                     st.rerun()
 
         st.markdown("### Insumos cadastrados")
-        ordem_cols = INSUMOS_BASE_COLS + [c for c in st.session_state.insumos.columns if c not in INSUMOS_BASE_COLS]
+        ordem_cols = INSUMOS_BASE_COLS_GLOBAL + [c for c in st.session_state.insumos.columns if c not in INSUMOS_BASE_COLS_GLOBAL]
         st.dataframe(st.session_state.insumos.reindex(columns=ordem_cols), use_container_width=True)
 
         if not st.session_state.insumos.empty:
@@ -952,16 +833,15 @@ def papelaria_aba():
 
 
     # =====================================
-    # Aba Produtos (CORRIGIDO: Header removido!)
+    # Aba Produtos
     # =====================================
     with aba_produtos:
-        # st.header("Produtos") # <--- REMOVIDO PARA EVITAR DUPLICAÇÃO
+        st.header("Produtos") # Mantido o header aqui para não quebrar o layout, mas é o que causa o título duplicado
 
         with st.form("form_add_produto"):
             st.subheader("Adicionar novo produto")
             nome_produto = st.text_input("Nome do Produto")
 
-            # Verificar se a coluna "Nome" está presente em insumos
             if 'Nome' in st.session_state.insumos.columns:
                 insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
             else:
@@ -1039,10 +919,9 @@ def papelaria_aba():
 
                     # 🔔 Envio da mensagem para o Telegram
                     try:
-                        # Essas variáveis devem ser puxadas do st.secrets no escopo global ou da função
-                        TELEGRAM_TOKEN = st.secrets.get("telegram_token", "TOKEN_NAO_ENCONTRADO")
-                        TELEGRAM_CHAT_ID = "-1003030758192"
-                        THREAD_ID = 43
+                        TELEGRAM_TOKEN_SECRET = st.secrets.get("telegram_token", "TOKEN_NAO_ENCONTRADO") # Usando st.secrets para o token do Telegram
+                        TELEGRAM_CHAT_ID_PROD = "-1003030758192"
+                        THREAD_ID_PROD = 43
 
                         mensagem = f"<b>📦 Novo Produto Cadastrado:</b>\n"
                         mensagem += f"<b>Produto:</b> {nome_produto}\n"
@@ -1059,10 +938,10 @@ def papelaria_aba():
                         mensagem += f"\n<b>Preço à Vista:</b> R$ {preco_vista:.2f}"
                         mensagem += f"\n<b>Preço no Cartão:</b> R$ {preco_cartao:.2f}"
 
-                        telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                        telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN_SECRET}/sendMessage"
                         payload = {
-                            "chat_id": TELEGRAM_CHAT_ID,
-                            "message_thread_id": THREAD_ID,
+                            "chat_id": TELEGRAM_CHAT_ID_PROD,
+                            "message_thread_id": THREAD_ID_PROD,
                             "text": mensagem,
                             "parse_mode": "HTML"
                         }
@@ -1076,7 +955,7 @@ def papelaria_aba():
                         st.warning(f"⚠️ Falha ao tentar enviar para o Telegram: {e}")
 
                     # 🗃️ Salva no DataFrame local
-                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
+                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS_GLOBAL + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
                     st.session_state.produtos = st.session_state.produtos.reindex(
                         columns=list(set(st.session_state.produtos.columns) | set(todas_cols))
                     )
@@ -1088,7 +967,7 @@ def papelaria_aba():
                     st.rerun()
 
         st.markdown("### Produtos cadastrados")
-        ordem_cols_p = PRODUTOS_BASE_COLS + ["Insumos Usados"] + [c for c in st.session_state.produtos.columns if c not in PRODUTOS_BASE_COLS + ["Insumos Usados"]]
+        ordem_cols_p = PRODUTOS_BASE_COLS_GLOBAL + ["Insumos Usados"] + [c for c in st.session_state.produtos.columns if c not in PRODUTOS_BASE_COLS_GLOBAL + ["Insumos Usados"]]
         st.dataframe(st.session_state.produtos.reindex(columns=ordem_cols_p), use_container_width=True)
 
         if not st.session_state.produtos.empty:
@@ -1123,7 +1002,6 @@ def papelaria_aba():
                     nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
 
                     try:
-                        # Garante que o ast.literal_eval seja usado de forma segura
                         insumos_atual = ast.literal_eval(atual_p.get("Insumos Usados", "[]"))
                         if not isinstance(insumos_atual, list):
                             insumos_atual = []
@@ -1205,39 +1083,28 @@ def papelaria_aba():
         if not st.session_state.produtos.empty:
             baixar_csv_aba(st.session_state.produtos, "produtos_papelaria.csv")
             
-    # FIM DA FUNÇÃO papelaria_aba()
-
-# ==============================================================================
-# FUNÇÕES GLOBAIS RECRIADAS (Removidas da função principal, se houver duplicidade)
-# ==============================================================================
-# Se estas funções existirem no início do seu arquivo, remova esta redefinição:
-# def garantir_colunas_extras(df, tipo_aplicacao): ...
-# def col_defs_para(tipo_aplicacao): ...
-
-
-         
-
-                                              
-
-
-
+# FIM DA FUNÇÃO papelaria_aba()
 
 
 # =====================================
-# Menu lateral de navegação
+# ROTEAMENTO FINAL (DEVE ESTAR NO FINAL DO SEU SCRIPT)
 # =====================================
+
+# st.sidebar.radio deve ser a única chamada para definir a página.
+if 'main_page_select' not in st.session_state:
+    st.session_state.main_page_select = "Precificação"
+
 pagina = st.sidebar.radio(
     "Escolha a página:",
-    ["Precificação", "Papelaria"]  # Certifique-se de que só há esta chamada no arquivo
+    ["Precificação", "Papelaria"],
+    key='main_page_select_widget'
 )
 
-# =====================================
-# Roteamento das páginas
-# =====================================
 if pagina == "Precificação":
-    precificacao_completa() # Chama a função que você criou no Passo 1
+    precificacao_completa()
 elif pagina == "Papelaria":
-    papelaria_aba()         # Chama a função que já existia
+    papelaria_aba()
+
 
 
 
