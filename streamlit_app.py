@@ -696,6 +696,8 @@ def papelaria_aba():
         st.session_state.hash_produtos = novo_hash
 
 
+    def papelaria_aba():
+    st.write("📚 Gerenciador Papelaria Personalizada")
     # ---------------------
     # Criação das abas
     # ---------------------
@@ -1199,6 +1201,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
