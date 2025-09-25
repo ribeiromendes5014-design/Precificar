@@ -76,35 +76,13 @@ def enviar_pdf_telegram(pdf_bytesio):
             chat_id=GRUPO_ID,
             document=pdf_bytesio,
             filename="precificacao_produto.pdf",
-            caption="📄 Aqui está o PDF com a precificação.",
-            message_thread_id=TOPICO_ID
+            caption="📄 Aqui está o PDF com a precificação."
+            # message_thread_id=TOPICO_ID  # comente para testar
         )
         st.success("✅ PDF enviado para o Telegram com sucesso!")
     except Exception as e:
         st.error(f"Erro ao enviar PDF: {e}")
 
-
-# --- Parte Streamlit ---
-st.title("📊 Precificador de Produtos")
-
-# Simulando dataframe de produtos já processados (use seu df real da sessão)
-if "df_produtos_geral" not in st.session_state:
-    st.session_state.df_produtos_geral = pd.DataFrame(columns=[
-        "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto",
-        "Margem (%)", "Preço à Vista", "Preço no Cartão"
-    ])
-
-# Exibir tabela
-st.subheader("Produtos cadastrados")
-st.dataframe(st.session_state.df_produtos_geral)
-
-# Botão para gerar e enviar PDF
-if st.button("📤 Gerar PDF e enviar para Telegram"):
-    if st.session_state.df_produtos_geral.empty:
-        st.warning("⚠️ Nenhum produto para gerar PDF.")
-    else:
-        pdf_gerado = gerar_pdf(st.session_state.df_produtos_geral)
-        enviar_pdf_telegram(pdf_gerado)
 
 
 
@@ -1142,6 +1120,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
