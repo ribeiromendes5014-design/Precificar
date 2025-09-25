@@ -696,13 +696,14 @@ def papelaria_aba():
         st.session_state.hash_produtos = novo_hash
 
 
-    def papelaria_aba():
-    st.write("📚 Gerenciador Papelaria Personalizada")
+    
     # ---------------------
     # Criação das abas
     # ---------------------
     aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
-
+    def papelaria_aba():
+    st.write("📚 Gerenciador Papelaria Personalizada")
+    
     # =====================================
     # Aba Campos (gerencia colunas extras)
     # =====================================
@@ -1201,6 +1202,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
