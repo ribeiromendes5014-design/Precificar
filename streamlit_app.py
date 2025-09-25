@@ -28,34 +28,85 @@ def exibir_papelaria():
 
 
 import streamlit as st
+import pandas as pd
 from telegram import Bot
+from io import BytesIO
+from fpdf import FPDF  # Biblioteca para gerar PDF, instale com: pip install fpdf
 
-# Token e IDs fixos do Telegram
+
+# --- Configurações Telegram ---
 TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 GRUPO_ID = -1003030758192
-TOPICO_ID = 28
+TOPICO_ID = 28  # Thread no grupo
 
-def gerar_pdf(caminho_pdf):
-    # Sua lógica para gerar o PDF e salvar em caminho_pdf
-    # Exemplo simples, você pode usar reportlab, fpdf, matplotlib, etc.
-    with open(caminho_pdf, "wb") as f:
-        f.write(b"%PDF-1.4\n%PDF gerado de exemplo\n")  # só um placeholder
 
-def enviar_pdf_telegram(caminho_pdf):
-    bot = Bot(token=TOKEN)
-    with open(caminho_pdf, "rb") as arquivo:
-        bot.send_document(
-            chat_id=GRUPO_ID,
-            document=arquivo,
-            message_thread_id=TOPICO_ID,
-            caption="📄 Aqui está o PDF com a precificação."
-        )
-    st.success("PDF enviado para o Telegram com sucesso!")
+# --- Função para gerar PDF com detalhes dos produtos ---
+def gerar_pdf(df: pd.DataFrame) -> BytesIO:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
+    pdf.ln(10)
 
-if st.button("Gerar PDF e enviar Telegram"):
-    caminho_pdf = "precificacao_produto.pdf"
-    gerar_pdf(caminho_pdf)
-    enviar_pdf_telegram(caminho_pdf)
+    pdf.set_font("Arial", "", 12)
+    if df.empty:
+        pdf.cell(0, 10, "Nenhum produto cadastrado.", 0, 1)
+    else:
+        for idx, row in df.iterrows():
+            pdf.cell(0, 8, f"Produto: {row['Produto']}", 0, 1)
+            pdf.cell(0, 8, f"Quantidade: {row['Qtd']}", 0, 1)
+            pdf.cell(0, 8, f"Custo Unitário: R$ {row['Custo Unitário']:.2f}", 0, 1)
+            pdf.cell(0, 8, f"Custos Extras Produto: R$ {row.get('Custos Extras Produto', 0):.2f}", 0, 1)
+            pdf.cell(0, 8, f"Margem (%): {row['Margem (%)']:.2f}%", 0, 1)
+            pdf.cell(0, 8, f"Preço à Vista: R$ {row['Preço à Vista']:.2f}", 0, 1)
+            pdf.cell(0, 8, f"Preço no Cartão: R$ {row['Preço no Cartão']:.2f}", 0, 1)
+            pdf.ln(5)
+
+    pdf_output = BytesIO()
+    pdf.output(pdf_output)
+    pdf_output.seek(0)
+    return pdf_output
+
+
+# --- Função para enviar PDF via Telegram ---
+def enviar_pdf_telegram(bot_token, chat_id, pdf_bytesio, topic_id=None):
+    bot = Bot(token=bot_token)
+    # Para enviar o PDF, usamos send_document com o arquivo em bytes
+    bot.send_document(
+        chat_id=chat_id,
+        document=pdf_bytesio,
+        filename="precificacao_produto.pdf",
+        caption="📄 Aqui está o PDF com a precificação.",
+        message_thread_id=topic_id,
+    )
+
+
+# --- Parte Streamlit ---
+st.title("📊 Precificador de Produtos")
+
+# Simulando dataframe de produtos já processados (use seu df real da sessão)
+if "df_produtos_geral" not in st.session_state:
+    st.session_state.df_produtos_geral = pd.DataFrame(columns=[
+        "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto",
+        "Margem (%)", "Preço à Vista", "Preço no Cartão"
+    ])
+
+# Exibir tabela
+st.subheader("Produtos cadastrados")
+st.dataframe(st.session_state.df_produtos_geral)
+
+# Botão para gerar e enviar PDF
+if st.button("📤 Gerar PDF e enviar para Telegram"):
+    if st.session_state.df_produtos_geral.empty:
+        st.warning("⚠️ Nenhum produto para gerar PDF.")
+    else:
+        pdf_gerado = gerar_pdf(st.session_state.df_produtos_geral)
+        try:
+            enviar_pdf_telegram(TOKEN, GRUPO_ID, pdf_gerado, TOPICO_ID)
+            st.success("✅ PDF enviado para o Telegram com sucesso!")
+        except Exception as e:
+            st.error(f"Erro ao enviar PDF: {e}")
+
 
 
 # ===============================
@@ -1091,6 +1142,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
