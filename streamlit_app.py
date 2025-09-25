@@ -817,7 +817,15 @@ if not st.session_state.campos.empty:
                             st.session_state.produtos[novo_nome] = ""
                     st.success("Campo atualizado!")
                     st.rerun()
-
+                    
+def baixar_csv(df, nome_arquivo):
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Baixar CSV",
+        data=csv,
+        file_name=nome_arquivo,
+        mime='text/csv',
+    )
 
 # Função para garantir que as colunas extras estejam no dataframe
 def garantir_colunas_extras(df, tipo_aplicacao):
@@ -845,14 +853,7 @@ with aba_insumos:
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
 
-  if st.button("📤 Salvar PRODUTOS no GitHub"):
-    salvar_csv_no_github(
-        GITHUB_TOKEN,
-        GITHUB_REPO,
-        "produtos_papelaria.csv",
-        st.session_state.produtos,
-        GITHUB_BRANCH
-    )
+  
 
 
 
@@ -1247,6 +1248,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
