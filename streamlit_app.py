@@ -933,98 +933,136 @@ def papelaria_aba():
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
     # =====================================
-    # Aba Produtos
-    # =====================================
-    with aba_produtos:
-        st.header("Produtos")
+# Aba Produtos
+# =====================================
+with aba_produtos:
+    st.header("Produtos")
 
-        st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+    st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
-        with st.form("form_add_produto"):
-            st.subheader("Adicionar novo produto")
-            nome_produto = st.text_input("Nome do Produto")
+    with st.form("form_add_produto"):
+        st.subheader("Adicionar novo produto")
+        nome_produto = st.text_input("Nome do Produto")
 
-            insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
-            insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
+        insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
+        insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
 
-            insumos_usados = []
-            custo_total = 0.0
+        insumos_usados = []
+        custo_total = 0.0
 
-            for insumo in insumos_selecionados:
-                dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
-                preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
-                unidade = str(dados_insumo.get("Unidade", ""))
+        for insumo in insumos_selecionados:
+            dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
+            preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
+            unidade = str(dados_insumo.get("Unidade", ""))
 
-                qtd_usada = st.number_input(
-                    f"Quantidade usada de {insumo} ({unidade}) - Preço unitário R$ {preco_unit:.2f}",
-                    min_value=0.0,
-                    step=0.01,
-                    key=f"novo_qtd_{insumo}"
+            qtd_usada = st.number_input(
+                f"Quantidade usada de {insumo} ({unidade}) - Preço unitário R$ {preco_unit:.2f}",
+                min_value=0.0,
+                step=0.01,
+                key=f"novo_qtd_{insumo}"
+            )
+
+            custo_insumo = qtd_usada * preco_unit
+            custo_total += custo_insumo
+
+            insumos_usados.append({
+                "Insumo": insumo,
+                "Quantidade Usada": qtd_usada,
+                "Unidade": unidade,
+                "Preço Unitário (R$)": preco_unit,
+                "Custo": custo_insumo
+            })
+
+        st.markdown(f"**Custo Total Calculado (Insumos): R$ {custo_total:,.2f}**")
+
+        margem = st.number_input("Margem de Lucro (%)", min_value=0.0, format="%.2f", value=30.0)
+
+        preco_vista = custo_total * (1 + margem / 100) if custo_total > 0 else 0.0
+        preco_cartao = preco_vista / 0.8872 if preco_vista > 0 else 0.0
+
+        st.markdown(f"💸 **Preço à Vista Calculado:** R$ {preco_vista:,.2f}")
+        st.markdown(f"💳 **Preço no Cartão Calculado:** R$ {preco_cartao:,.2f}")
+
+        extras_produtos = col_defs_para("Produtos")
+        valores_extras_prod = {}
+        if not extras_produtos.empty:
+            st.markdown("**Campos extras**")
+            for i, row in extras_produtos.reset_index(drop=True).iterrows():
+                key = f"novo_produto_extra_{row['Campo']}"
+                valores_extras_prod[row["Campo"]] = render_input_por_tipo(
+                    label=row["Campo"],
+                    tipo=row["Tipo"],
+                    opcoes=row["Opções"],
+                    valor_padrao=None,
+                    key=key
                 )
 
-                custo_insumo = qtd_usada * preco_unit
-                custo_total += custo_insumo
+        adicionou_prod = st.form_submit_button("Adicionar Produto")
+        if adicionou_prod:
+            if not nome_produto.strip():
+                st.warning("Informe o Nome do Produto.")
+            elif not insumos_usados:
+                st.warning("Selecione ao menos um insumo para o produto.")
+            else:
+                novo = {
+                    "Produto": nome_produto.strip(),
+                    "Custo Total": float(custo_total),
+                    "Preço à Vista": float(preco_vista),
+                    "Preço no Cartão": float(preco_cartao),
+                    "Margem (%)": float(margem),
+                    "Insumos Usados": str(insumos_usados)
+                }
+                for k, v in valores_extras_prod.items():
+                    novo[k] = v
 
-                insumos_usados.append({
-                    "Insumo": insumo,
-                    "Quantidade Usada": qtd_usada,
-                    "Unidade": unidade,
-                    "Preço Unitário (R$)": preco_unit,
-                    "Custo": custo_insumo
-                })
+                # 🔔 Envio da mensagem para o Telegram
+                try:
+                    TELEGRAM_TOKEN = st.secrets["telegram_token"]
+                    TELEGRAM_CHAT_ID = "-1003030758192"
+                    THREAD_ID = 43
 
-            st.markdown(f"**Custo Total Calculado (Insumos): R$ {custo_total:,.2f}**")
+                    mensagem = f"<b>📦 Novo Produto Cadastrado:</b>\n"
+                    mensagem += f"<b>Produto:</b> {nome_produto}\n"
+                    mensagem += "<b>Insumos:</b>\n"
 
-            margem = st.number_input("Margem de Lucro (%)", min_value=0.0, format="%.2f", value=30.0)
+                    for insumo in insumos_usados:
+                        nome = insumo['Insumo']
+                        qtd = insumo['Quantidade Usada']
+                        un = insumo['Unidade']
+                        custo = insumo['Custo']
+                        mensagem += f"• {nome} - {qtd} {un} (R$ {custo:.2f})\n"
 
-            preco_vista = custo_total * (1 + margem / 100) if custo_total > 0 else 0.0
-            preco_cartao = preco_vista / 0.8872 if preco_vista > 0 else 0.0
+                    mensagem += f"\n<b>Custo Total:</b> R$ {custo_total:.2f}"
+                    mensagem += f"\n<b>Preço à Vista:</b> R$ {preco_vista:.2f}"
+                    mensagem += f"\n<b>Preço no Cartão:</b> R$ {preco_cartao:.2f}"
 
-            st.markdown(f"💸 **Preço à Vista Calculado:** R$ {preco_vista:,.2f}")
-            st.markdown(f"💳 **Preço no Cartão Calculado:** R$ {preco_cartao:,.2f}")
-
-            extras_produtos = col_defs_para("Produtos")
-            valores_extras_prod = {}
-            if not extras_produtos.empty:
-                st.markdown("**Campos extras**")
-                for i, row in extras_produtos.reset_index(drop=True).iterrows():
-                    key = f"novo_produto_extra_{row['Campo']}"
-                    valores_extras_prod[row["Campo"]] = render_input_por_tipo(
-                        label=row["Campo"],
-                        tipo=row["Tipo"],
-                        opcoes=row["Opções"],
-                        valor_padrao=None,
-                        key=key
-                    )
-
-            adicionou_prod = st.form_submit_button("Adicionar Produto")
-            if adicionou_prod:
-                if not nome_produto.strip():
-                    st.warning("Informe o Nome do Produto.")
-                elif not insumos_usados:
-                    st.warning("Selecione ao menos um insumo para o produto.")
-                else:
-                    novo = {
-                        "Produto": nome_produto.strip(),
-                        "Custo Total": float(custo_total),
-                        "Preço à Vista": float(preco_vista),
-                        "Preço no Cartão": float(preco_cartao),
-                        "Margem (%)": float(margem),
-                        "Insumos Usados": str(insumos_usados)
+                    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                    payload = {
+                        "chat_id": TELEGRAM_CHAT_ID,
+                        "message_thread_id": THREAD_ID,
+                        "text": mensagem,
+                        "parse_mode": "HTML"
                     }
-                    for k, v in valores_extras_prod.items():
-                        novo[k] = v
 
-                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
-                    st.session_state.produtos = st.session_state.produtos.reindex(
-                        columns=list(set(st.session_state.produtos.columns) | set(todas_cols))
-                    )
-                    st.session_state.produtos = pd.concat(
-                        [st.session_state.produtos, pd.DataFrame([novo])],
-                        ignore_index=True
-                    )
-                    st.success(f"Produto '{nome_produto}' adicionado!")
-                    st.rerun()
+                    response = requests.post(telegram_url, json=payload)
+                    if response.status_code == 200:
+                        st.success("✅ Mensagem enviada para o Telegram!")
+                    else:
+                        st.warning(f"⚠️ Erro ao enviar para Telegram: {response.text}")
+                except Exception as e:
+                    st.warning(f"⚠️ Falha ao tentar enviar para o Telegram: {e}")
+
+                # 🗃️ Salva no DataFrame local
+                todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
+                st.session_state.produtos = st.session_state.produtos.reindex(
+                    columns=list(set(st.session_state.produtos.columns) | set(todas_cols))
+                )
+                st.session_state.produtos = pd.concat(
+                    [st.session_state.produtos, pd.DataFrame([novo])],
+                    ignore_index=True
+                )
+                st.success(f"Produto '{nome_produto}' adicionado!")
+                st.rerun()
 
         st.markdown("### Produtos cadastrados")
         ordem_cols_p = PRODUTOS_BASE_COLS + ["Insumos Usados"] + [c for c in st.session_state.produtos.columns if c not in PRODUTOS_BASE_COLS + ["Insumos Usados"]]
@@ -1160,6 +1198,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
