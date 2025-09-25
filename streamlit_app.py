@@ -1225,7 +1225,15 @@ with aba_produtos:
                     st.success("Produto atualizado!")
                     st.rerun()
 
-    def baixar_csv(df, nome_arquivo):
+    # botão de exportação CSV fora dos forms
+    if not st.session_state.produtos.empty:
+        baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
+
+
+# =====================================
+# Função de exportação CSV
+# =====================================
+def baixar_csv(df, nome_arquivo):
     if df is None or df.empty:
         st.warning("⚠️ Nenhum dado disponível para exportar.")
         return
@@ -1237,6 +1245,7 @@ with aba_produtos:
         file_name=nome_arquivo,
         mime='text/csv',
     )
+
 
 
          
@@ -1251,6 +1260,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
