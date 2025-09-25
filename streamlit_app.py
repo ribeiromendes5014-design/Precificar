@@ -1144,22 +1144,38 @@ with aba_produtos:
                             key=key
                         )
 
-                salvou_p = st.form_submit_button("Salvar Alterações", key=f"salvar_produto_{idx_p}")
-                if salvou_p:
-                    st.session_state.produtos.loc[idx_p, "Produto"] = novo_nome
-                    st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
-                    st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
-                    st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-                    st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
-                    st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
-                    for k, v in valores_extras_edit_p.items():
-                        st.session_state.produtos.loc[idx_p, k] = v
-                    st.success("Produto atualizado!")
-                    st.rerun()
+                import io
+import pandas as pd
+import streamlit as st
 
-    baixar_csv(st.session_state.produtos, "produtos_papelaria.csv")
-    if st.button("📤 Salvar PRODUTOS no GitHub"):
-        salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "produtos_papelaria.csv", st.session_state.produtos, GITHUB_BRANCH)
+# ... código anterior ...
+
+salvou_p = st.form_submit_button("Salvar Alterações", key=f"salvar_produto_{idx_p}")
+if salvou_p:
+    st.session_state.produtos.loc[idx_p, "Produto"] = novo_nome
+    st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
+    st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
+    st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
+    st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
+    st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
+    for k, v in valores_extras_edit_p.items():
+        st.session_state.produtos.loc[idx_p, k] = v
+    st.success("Produto atualizado!")
+    st.rerun()
+
+def baixar_csv(df: pd.DataFrame, nome_arquivo: str):
+    if df.empty:
+        st.warning("Nenhum dado para exportar.")
+        return
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False)
+    st.download_button(
+        label="📥 Baixar CSV",
+        data=csv_buffer.getvalue(),
+        file_name=nome_arquivo,
+        mime="text/csv"
+    )
+
 
 
 
@@ -1178,6 +1194,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
