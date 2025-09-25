@@ -701,8 +701,6 @@ def papelaria_aba():
     # Criação das abas
     # ---------------------
     aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
-    def papelaria_aba():
-    st.write("📚 Gerenciador Papelaria Personalizada")
     
     # =====================================
     # Aba Campos (gerencia colunas extras)
@@ -1192,16 +1190,16 @@ with aba_produtos:
 
 
 
-
 # Sidebar para seleção da aba
 pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelaria"])
 
-# Mostrar conteúdo com base na seleção
+
 if pagina == "Precificação":
-    exibir_precificacao()
+# exibir_precificacao() # substitua com sua função de precificação
+st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
-    # exibir_papelaria()   # <-- esta é a antiga
-    papelaria_aba()         # <-- chame a versão completa
+papelaria_aba()
+
 
 
 
