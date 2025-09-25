@@ -246,7 +246,7 @@ with tab_manual:
         # Se flag de rerun estiver presente, dispara o rerun e limpa os campos
         if st.session_state.get("rerun_after_add"):
             del st.session_state["rerun_after_add"]
-            st.experimental_rerun()
+            st.rerun()
 
         st.subheader("Adicionar novo produto")
 
@@ -1034,6 +1034,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
