@@ -939,6 +939,9 @@ if __name__ == "__main__":
 # Aba Produtos
 # =====================================
 
+# Certifique-se de definir as abas antes de usar 'aba_produtos'
+aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
+
 with aba_produtos:
     st.header("Produtos")
 
@@ -1175,6 +1178,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
