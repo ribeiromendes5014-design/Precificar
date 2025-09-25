@@ -38,28 +38,52 @@ TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 TELEGRAM_CHAT_ID = "-1003030758192"
 TOPICO_ID = 28  # ID do tópico (thread) no grupo Telegram
 
+
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
-    pdf.ln(10)
+    pdf.ln(5)
+
+    # Configurações de fonte para tabela
+    pdf.set_font("Arial", "B", 12)
+
+    # Definindo largura das colunas (em mm)
+    col_widths = {
+        "Produto": 50,
+        "Qtd": 15,
+        "Custo Unitário": 35,
+        "Margem (%)": 25,
+        "Preço à Vista": 35,
+        "Preço no Cartão": 35
+    }
+
+    # Cabeçalho da tabela
+    for col_name, width in col_widths.items():
+        pdf.cell(width, 10, col_name, border=1, align='C')
+    pdf.ln()
+
+    # Fonte para corpo da tabela
     pdf.set_font("Arial", "", 12)
 
     if df.empty:
-        pdf.cell(0, 10, "Nenhum produto cadastrado.", 0, 1)
+        pdf.cell(sum(col_widths.values()), 10, "Nenhum produto cadastrado.", border=1, align="C")
+        pdf.ln()
     else:
+        # Itera pelas linhas e escreve na tabela
         for idx, row in df.iterrows():
-            pdf.cell(0, 8, f"Produto: {row['Produto']}", 0, 1)
-            pdf.cell(0, 8, f"Quantidade: {row['Qtd']}", 0, 1)
-            pdf.cell(0, 8, f"Custo Unitário: R$ {row['Custo Unitário']:.2f}", 0, 1)
-            pdf.cell(0, 8, f"Margem (%): {row['Margem (%)']:.2f}%", 0, 1)
-            pdf.cell(0, 8, f"Preço à Vista: R$ {row['Preço à Vista']:.2f}", 0, 1)
-            pdf.cell(0, 8, f"Preço no Cartão: R$ {row['Preço no Cartão']:.2f}", 0, 1)
-            pdf.ln(5)
+            pdf.cell(col_widths["Produto"], 10, str(row["Produto"]), border=1)
+            pdf.cell(col_widths["Qtd"], 10, str(row["Qtd"]), border=1, align="C")
+            pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {row['Custo Unitário']:.2f}", border=1, align="R")
+            pdf.cell(col_widths["Margem (%)"], 10, f"{row['Margem (%)']:.2f}%", border=1, align="R")
+            pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row['Preço à Vista']:.2f}", border=1, align="R")
+            pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row['Preço no Cartão']:.2f}", border=1, align="R")
+            pdf.ln()
 
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     return BytesIO(pdf_bytes)
+
 
 def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
@@ -1136,6 +1160,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
