@@ -19,39 +19,29 @@ TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
-    # CORRIGIDO: Garantido que não há caracteres invisíveis
+    # ... (código da função gerar_pdf) ...
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
     pdf.ln(5)
 
-    # Configurações de fonte para tabela
     pdf.set_font("Arial", "B", 12)
 
-    # Definindo largura das colunas (em mm)
     col_widths = {
-        "Produto": 50,
-        "Qtd": 15,
-        "Custo Unitário": 35,
-        "Margem (%)": 25,
-        "Preço à Vista": 35,
-        "Preço no Cartão": 35
+        "Produto": 50, "Qtd": 15, "Custo Unitário": 35, "Margem (%)": 25, "Preço à Vista": 35, "Preço no Cartão": 35
     }
 
-    # Cabeçalho da tabela
     for col_name, width in col_widths.items():
         pdf.cell(width, 10, col_name, border=1, align='C')
     pdf.ln()
 
-    # Fonte para corpo da tabela
     pdf.set_font("Arial", "", 12)
 
     if df.empty:
         pdf.cell(sum(col_widths.values()), 10, "Nenhum produto cadastrado.", border=1, align="C")
         pdf.ln()
     else:
-        # Itera pelas linhas e escreve na tabela
         for idx, row in df.iterrows():
             pdf.cell(col_widths["Produto"], 10, str(row["Produto"]), border=1)
             pdf.cell(col_widths["Qtd"], 10, str(row["Qtd"]), border=1, align="C")
@@ -66,6 +56,7 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
 
 
 def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
+    # ... (código da função enviar_pdf_telegram) ...
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
     files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
     data = {"chat_id": TELEGRAM_CHAT_ID}
@@ -82,7 +73,7 @@ def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
 
 
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
-    """Exibe os resultados de precificação com tabela e imagens dos produtos."""
+    # ... (código da função exibir_resultados) ...
     if df is None or df.empty:
         st.info("⚠️ Nenhum produto disponível para exibir.")
         return
@@ -126,76 +117,38 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
 
 def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
                         modo_margem: str, margem_fixa: float) -> pd.DataFrame:
-    if df.empty:
-        return df
-
+    # ... (código da função processar_dataframe) ...
+    if df.empty: return df
     df = df.copy()
     rateio_unitario = 0
-
-    # Calcular rateio por unidade com base no frete + custos extras
     if frete_total > 0 or custos_extras > 0:
         qtd_total = df["Qtd"].sum()
-        if qtd_total > 0:
-            rateio_unitario = (frete_total + custos_extras) / qtd_total
-
-    # Garantir que a coluna "Custos Extras Produto" exista e esteja limpa
-    if "Custos Extras Produto" not in df.columns:
-        df["Custos Extras Produto"] = 0.0
-    else:
-        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0.0)
-
-    # Adicionar o rateio ao custo extra por produto
+        if qtd_total > 0: rateio_unitario = (frete_total + custos_extras) / qtd_total
+    
+    if "Custos Extras Produto" not in df.columns: df["Custos Extras Produto"] = 0.0
+    else: df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0.0)
     df["Custos Extras Produto"] += rateio_unitario
-
-    # Garantir que a coluna "Custo Unitário" exista e esteja limpa
-    if "Custo Unitário" not in df.columns:
-        df["Custo Unitário"] = 0.0
-    else:
-        df["Custo Unitário"] = df["Custo Unitário"].fillna(0.0)
-
-    # Calcular o custo total por unidade
+    
+    if "Custo Unitário" not in df.columns: df["Custo Unitário"] = 0.0
+    else: df["Custo Unitário"] = df["Custo Unitário"].fillna(0.0)
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
-
-    # Processar margens conforme o modo selecionado
-    if "Margem (%)" not in df.columns:
-        df["Margem (%)"] = margem_fixa
-    else:
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
-
-    if modo_margem == "Margem fixa":
-        pass
-    elif modo_margem == "Margem por produto":
-        pass
-    else:
-        pass
-
-    # Calcular os preços finais
+    
+    if "Margem (%)" not in df.columns: df["Margem (%)"] = margem_fixa
+    else: df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
+    
+    if modo_margem == "Margem fixa": pass
+    elif modo_margem == "Margem por produto": pass
+    else: pass
+    
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
-
     return df
 
-def load_csv_github(url: str) -> pd.DataFrame:
+# FUNÇÃO GLOBAL DE CARREGAMENTO CSV (Usada pela Precificação e Papelaria)
+def carregar_csv_github(url: str, colunas=None) -> pd.DataFrame:
+    """Carrega CSV do GitHub, garantindo colunas se necessário."""
     try:
         response = requests.get(url)
-        response.raise_for_status()
-        df = pd.read_csv(StringIO(response.text))
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar CSV do GitHub: {e}")
-        return pd.DataFrame()
-
-
-def extrair_produtos_pdf(pdf_file) -> list:
-    # Implementação fictícia
-    st.warning("Função extrair_produtos_pdf ainda não implementada.")
-    return []
-
-
-# Funções auxiliares da Papelaria
-def carregar_csv_github_papelaria(url, colunas=None):
-    try:
-        response = requests.get(url, timeout=10)
         response.raise_for_status()
         df = pd.read_csv(StringIO(response.text))
         if colunas is not None:
@@ -205,9 +158,17 @@ def carregar_csv_github_papelaria(url, colunas=None):
             df = df[[c for c in colunas if c in df.columns]]
         return df
     except Exception as e:
-        st.warning(f"Não foi possível carregar CSV do GitHub ({url}): {e}")
+        st.error(f"Erro ao carregar CSV do GitHub: {e}")
         return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
 
+
+def extrair_produtos_pdf(pdf_file) -> list:
+    # Implementação fictícia
+    st.warning("Função extrair_produtos_pdf ainda não implementada.")
+    return []
+
+
+# Funções auxiliares da Papelaria (Mantidas no escopo global para acesso)
 def baixar_csv_aba(df, nome_arquivo):
     csv = df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
@@ -224,8 +185,8 @@ def _opcoes_para_lista(opcoes_str):
 
 def hash_df(df):
     return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
-
-# Definições de colunas base
+    
+# Definições de colunas base (Renomeadas para evitar conflito com as variáveis da função papelaria_aba)
 INSUMOS_BASE_COLS_GLOBAL = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
 PRODUTOS_BASE_COLS_GLOBAL = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
 COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]
@@ -318,7 +279,7 @@ def precificacao_completa():
     ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
     imagens_dict = {}
 
-    # Criar as tabs de INPUT (MOVIDO DAQUI)
+    # Criar as tabs
     tab_pdf, tab_manual, tab_github = st.tabs([
         "📄 Precificador PDF",
         "✍️ Precificador Manual",
@@ -351,7 +312,7 @@ def precificacao_completa():
         else:
             st.info("📄 Faça upload de um arquivo PDF para começar.")
             if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
-                df_exemplo = load_csv_github(ARQ_CAIXAS)
+                df_exemplo = carregar_csv_github(ARQ_CAIXAS)
                 if not df_exemplo.empty:
                     df_exemplo["Custos Extras Produto"] = 0.0
                     df_exemplo["Imagem"] = None
@@ -501,7 +462,7 @@ def precificacao_completa():
         st.markdown("---")
         st.header("📥 Carregar CSV de Precificação do GitHub")
         if st.button("🔄 Carregar CSV do GitHub (Tab GitHub)"):
-            df_exemplo = load_csv_github(ARQ_CAIXAS)
+            df_exemplo = carregar_csv_github(ARQ_CAIXAS)
             if not df_exemplo.empty:
                 df_exemplo["Custos Extras Produto"] = 0.0
                 df_exemplo["Imagem"] = None
@@ -523,11 +484,8 @@ def papelaria_aba():
     st.title("📚 Gerenciador Papelaria Personalizada")
     
     # === 1. TABELA DE PRODUTOS CADASTRADOS (MOVIDO DA PRECIFICAÇÃO) ===
-    if "df_produtos_geral" not in st.session_state:
-        st.session_state.df_produtos_geral = pd.DataFrame([
-            {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
-            {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
-        ])
+    # A inicialização do df_produtos_geral já foi feita em precificacao_completa()
+    # Apenas garantimos que está no estado da sessão.
 
     st.subheader("Produtos cadastrados")
     st.dataframe(st.session_state.df_produtos_geral)
@@ -554,7 +512,7 @@ def papelaria_aba():
 
     # Estado da sessão
     if "insumos" not in st.session_state:
-        st.session_state.insumos = carregar_csv_github_papelaria(INSUMOS_CSV_URL)
+        st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL)
 
     if "produtos" not in st.session_state:
         st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL)
@@ -573,11 +531,11 @@ def papelaria_aba():
         st.session_state.produtos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
     
     # Garante colunas base nos DataFrames
-    for col in INSUMOS_BASE_COLS_GLOBAL: # Usando a variável global para manter a consistência
+    for col in INSUMOS_BASE_COLS_GLOBAL:
         if col not in st.session_state.insumos.columns:
             st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
 
-    for col in PRODUTOS_BASE_COLS_GLOBAL: # Usando a variável global para manter a consistência
+    for col in PRODUTOS_BASE_COLS_GLOBAL:
         if col not in st.session_state.produtos.columns:
             st.session_state.produtos[col] = "" if col not in ["Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"] else 0.0
 
@@ -934,9 +892,9 @@ def papelaria_aba():
                             custo = insumo['Custo']
                             mensagem += f"• {nome} - {qtd} {un} (R$ {custo:.2f})\n"
 
-                        mensagem += f"\n<b>Custo Total:</b> R$ {custo_total:.2f}"
-                        mensagem += f"\n<b>Preço à Vista:</b> R$ {preco_vista:.2f}"
-                        mensagem += f"\n<b>Preço no Cartão:</b> R$ {preco_cartao:.2f}"
+                        mensagem += f"\n<b>Custo Total:</b> R$ {custo_total:,.2f}"
+                        mensagem += f"\n<b>Preço à Vista:</b> R$ {preco_vista:,.2f}"
+                        mensagem += f"\n<b>Preço no Cartão:</b> R$ {preco_cartao:,.2f}"
 
                         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN_SECRET}/sendMessage"
                         payload = {
@@ -1104,88 +1062,3 @@ if pagina == "Precificação":
     precificacao_completa()
 elif pagina == "Papelaria":
     papelaria_aba()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
