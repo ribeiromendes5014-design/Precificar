@@ -102,6 +102,8 @@ def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
 
 # --- Streamlit app ---
 
+def precificacao_completa():
+    st.title("📊 Precificador de Produtos") # <<< COMEÇA AQUI DENTRO DA FUNÇÃO
 st.title("📊 Precificador de Produtos")
 
 if "df_produtos_geral" not in st.session_state:
@@ -1269,6 +1271,7 @@ if pagina == "Precificação":
     precificacao_completa() # Chama a função que você criou no Passo 1
 elif pagina == "Papelaria":
     papelaria_aba()         # Chama a função que já existia
+
 
 
 
