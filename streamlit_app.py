@@ -496,15 +496,15 @@ def papelaria_aba():
             return pd.DataFrame(columns=colunas) if colunas else pd.DataFrame()
 
     def baixar_csv(df, nome_arquivo):
-        csv = df.to_csv(index=False, encoding="utf-8-sig")
-        st.download_button(
-            f"⬇️ Baixar {nome_arquivo}",
-            data=csv,
-            file_name=nome_arquivo,
-            mime="text/csv"
-        )
+    csv = df.to_csv(index=False, encoding="utf-8-sig")
+    st.download_button(
+        f"⬇️ Baixar {nome_arquivo}",
+        data=csv,
+        file_name=nome_arquivo,
+        mime="text/csv"
+    )
 
-    def _opcoes_para_lista(opcoes_str):
+def _opcoes_para_lista(opcoes_str):
     if pd.isna(opcoes_str) or not str(opcoes_str).strip():
         return []
     return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
@@ -1115,6 +1115,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
