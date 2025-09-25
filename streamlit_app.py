@@ -120,14 +120,7 @@ if st.button("📤 Gerar PDF e enviar para Telegram"):
         pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
         enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
 
-# =====================================
-# Roteamento das páginas
-# =====================================
-if pagina == "Precificação":
-    # Certifique-se de que a função precificacao_completa() foi definida
-    precificacao_completa() 
-elif pagina == "Papelaria":
-    papelaria_aba()
+
 
 
 
@@ -1277,6 +1270,7 @@ if pagina == "Precificação":
     precificacao_completa() 
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
