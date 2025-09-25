@@ -191,6 +191,40 @@ def extrair_produtos_pdf(pdf_file) -> list:
     st.warning("Função extrair_produtos_pdf ainda não implementada.")
     return []
 
+# NOVO: Função para baixar o estoque dos insumos
+def baixar_estoque_insumos(insumos_df: pd.DataFrame, insumos_usados: list, quantidade_produzida: int) -> pd.DataFrame:
+    """
+    Atualiza a coluna 'Estoque Atual' no DataFrame de insumos, reduzindo
+    o consumo total (quantidade usada por unidade * quantidade produzida).
+    """
+    df_novo = insumos_df.copy()
+    
+    # Garante que as colunas numéricas existam e sejam floats
+    for col in ["Estoque Atual", "Preço Unitário (R$)"]:
+        if col not in df_novo.columns:
+            df_novo[col] = 0.0
+        df_novo[col] = pd.to_numeric(df_novo[col], errors='coerce').fillna(0.0)
+
+    for item in insumos_usados:
+        nome_insumo = item.get("Insumo")
+        qtd_por_unidade = item.get("Quantidade Usada", 0.0)
+        
+        # O total de insumo consumido é a Qtd Usada por unidade do produto * Qtd de produtos produzidos
+        consumo_total = qtd_por_unidade * quantidade_produzida
+        
+        # Encontra a linha do insumo
+        idx_insumo = df_novo.index[df_novo["Nome"] == nome_insumo].tolist()
+        
+        if idx_insumo:
+            idx = idx_insumo[0]
+            estoque_atual = df_novo.loc[idx, "Estoque Atual"]
+            novo_estoque = estoque_atual - consumo_total
+            
+            # Atualiza o estoque, garantindo que não seja negativo
+            df_novo.loc[idx, "Estoque Atual"] = max(0.0, novo_estoque)
+
+    return df_novo
+
 
 # Funções auxiliares da Papelaria
 def baixar_csv_aba(df, nome_arquivo, key_suffix=""): # CORREÇÃO APLICADA AQUI
@@ -212,7 +246,8 @@ def hash_df(df):
     return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
 # Definições de colunas base
-INSUMOS_BASE_COLS_GLOBAL = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
+# ATUALIZADO: Adicionando colunas de estoque
+INSUMOS_BASE_COLS_GLOBAL = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)", "Estoque Atual", "Estoque Mínimo"]
 PRODUTOS_BASE_COLS_GLOBAL = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
 COLUNAS_CAMPOS = ["Campo", "Aplicação", "Tipo", "Opções"]
 
@@ -557,8 +592,9 @@ def papelaria_aba():
     if "campos" not in st.session_state:
         st.session_state.campos = pd.DataFrame(columns=["Campo", "Aplicação", "Tipo", "Opções"])
 
+    # ATUALIZADO: Inicializa insumos com colunas de estoque
     if "insumos" not in st.session_state:
-        st.session_state.insumos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
+        st.session_state.insumos = pd.DataFrame(columns=INSUMOS_BASE_COLS_GLOBAL)
 
     if "produtos" not in st.session_state:
         st.session_state.produtos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
@@ -566,7 +602,8 @@ def papelaria_aba():
     # Garante colunas base nos DataFrames
     for col in INSUMOS_BASE_COLS_GLOBAL:
         if col not in st.session_state.insumos.columns:
-            st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
+            # ATUALIZADO: Define valor padrão 0.0 para estoque
+            st.session_state.insumos[col] = 0.0 if col in ["Preço Unitário (R$)", "Estoque Atual", "Estoque Mínimo"] else "" 
 
     for col in PRODUTOS_BASE_COLS_GLOBAL:
         if col not in st.session_state.produtos.columns:
@@ -713,6 +750,25 @@ def papelaria_aba():
     # =====================================
     with aba_insumos:
         st.header("Insumos") # Mantido o header aqui para não quebrar o layout, mas é o que causa o título duplicado
+        
+        # NOVO: Alerta de Estoque Mínimo
+        estoque_df = st.session_state.insumos.copy()
+        estoque_df["Estoque Atual"] = pd.to_numeric(estoque_df["Estoque Atual"], errors='coerce').fillna(0)
+        estoque_df["Estoque Mínimo"] = pd.to_numeric(estoque_df["Estoque Mínimo"], errors='coerce').fillna(0)
+        
+        alertas_estoque = estoque_df[estoque_df["Estoque Atual"] <= estoque_df["Estoque Mínimo"]]
+
+        if not alertas_estoque.empty:
+            st.warning("🚨 ATENÇÃO: Os seguintes insumos estão com estoque baixo ou zerado:")
+            
+            # Exibe em uma tabela pequena apenas os itens críticos
+            alertas_display = alertas_estoque[["Nome", "Estoque Atual", "Estoque Mínimo", "Unidade"]]
+            st.dataframe(alertas_display, hide_index=True, use_container_width=True)
+        else:
+            st.info("✅ Todos os insumos estão acima do estoque mínimo.")
+
+        st.markdown("---") # Separador visual
+
 
         st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
@@ -720,8 +776,20 @@ def papelaria_aba():
             st.subheader("Adicionar novo insumo")
             nome_insumo = st.text_input("Nome do Insumo")
             categoria_insumo = st.text_input("Categoria")
-            unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)")
-            preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f")
+            
+            col_u, col_p = st.columns(2)
+            with col_u:
+                unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)")
+            with col_p:
+                preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f")
+
+            # NOVO: Campos de Estoque Inicial
+            col_ea, col_em = st.columns(2)
+            with col_ea:
+                 estoque_atual = st.number_input("Estoque Atual", min_value=0.0, format="%.2f", key="novo_estoque_atual")
+            with col_em:
+                 estoque_minimo = st.number_input("Estoque Mínimo (Alerta)", min_value=0.0, format="%.2f", key="novo_estoque_minimo")
+
 
             extras_insumos = col_defs_para("Insumos")
             valores_extras = {}
@@ -747,6 +815,9 @@ def papelaria_aba():
                         "Categoria": categoria_insumo.strip(),
                         "Unidade": unidade_insumo.strip(),
                         "Preço Unitário (R$)": float(preco_insumo),
+                        # NOVO: Incluindo estoque
+                        "Estoque Atual": float(estoque_atual),
+                        "Estoque Mínimo": float(estoque_minimo),
                     }
                     for k, v in valores_extras.items():
                         novo[k] = v
@@ -790,11 +861,29 @@ def papelaria_aba():
                 with st.form(f"form_edit_insumo_{idx}"):
                     novo_nome = st.text_input("Nome do Insumo", value=str(atual.get("Nome","")))
                     nova_categoria = st.text_input("Categoria", value=str(atual.get("Categoria","")))
-                    nova_unidade = st.text_input("Unidade de Medida (ex: un, kg, m)", value=str(atual.get("Unidade","")))
-                    novo_preco = st.number_input(
-                        "Preço Unitário (R$)", min_value=0.0, format="%.2f",
-                        value=float(atual.get("Preço Unitário (R$)", 0.0))
-                    )
+                    
+                    col_eu, col_ep = st.columns(2)
+                    with col_eu:
+                        nova_unidade = st.text_input("Unidade de Medida (ex: un, kg, m)", value=str(atual.get("Unidade","")))
+                    with col_ep:
+                        novo_preco = st.number_input(
+                            "Preço Unitário (R$)", min_value=0.0, format="%.2f",
+                            value=float(atual.get("Preço Unitário (R$)", 0.0))
+                        )
+
+                    # NOVO: Campos de Estoque para Edição
+                    col_eea, col_eem = st.columns(2)
+                    with col_eea:
+                        novo_estoque_atual = st.number_input(
+                            "Estoque Atual", min_value=0.0, format="%.2f", 
+                            value=float(atual.get("Estoque Atual", 0.0)), key=f"edit_estoque_atual_{idx}"
+                        )
+                    with col_eem:
+                        novo_estoque_minimo = st.number_input(
+                            "Estoque Mínimo (Alerta)", min_value=0.0, format="%.2f", 
+                            value=float(atual.get("Estoque Mínimo", 0.0)), key=f"edit_estoque_minimo_{idx}"
+                        )
+
 
                     valores_extras_edit = {}
                     extras_insumos = col_defs_para("Insumos")
@@ -817,6 +906,10 @@ def papelaria_aba():
                         st.session_state.insumos.loc[idx, "Categoria"] = nova_categoria
                         st.session_state.insumos.loc[idx, "Unidade"] = nova_unidade
                         st.session_state.insumos.loc[idx, "Preço Unitário (R$)"] = float(novo_preco)
+                        # NOVO: Salvando estoque
+                        st.session_state.insumos.loc[idx, "Estoque Atual"] = float(novo_estoque_atual)
+                        st.session_state.insumos.loc[idx, "Estoque Mínimo"] = float(novo_estoque_minimo)
+                        
                         for k, v in valores_extras_edit.items():
                             st.session_state.insumos.loc[idx, k] = v
                         st.success("Insumo atualizado!")
@@ -832,12 +925,17 @@ def papelaria_aba():
         with st.form("form_add_produto"):
             st.subheader("Adicionar novo produto")
             nome_produto = st.text_input("Nome do Produto")
-
+            
+            # NOVO: Campo para quantidade produzida/cadastrada
+            quantidade_produzida = st.number_input("Quantidade do Produto a ser Cadastrada/Produzida", min_value=1, step=1, value=1)
+            
             if 'Nome' in st.session_state.insumos.columns:
                 insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
             else:
                 insumos_disponiveis = []
 
+            st.markdown("---") # Separador visual para insumos
+            st.markdown("#### Insumos por Unidade do Produto")
             insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
 
             insumos_usados = []
@@ -860,7 +958,7 @@ def papelaria_aba():
 
                 insumos_usados.append({
                     "Insumo": insumo,
-                    "Quantidade Usada": qtd_usada,
+                    "Quantidade Usada": qtd_usada, # Qtd usada por UMA unidade do produto
                     "Unidade": unidade,
                     "Preço Unitário (R$)": preco_unit,
                     "Custo": custo_insumo
@@ -897,8 +995,18 @@ def papelaria_aba():
                 elif not insumos_usados:
                     st.warning("Selecione ao menos um insumo para o produto.")
                 else:
+                    # 🚀 NOVO: Baixa de estoque ANTES de salvar o produto
+                    st.session_state.insumos = baixar_estoque_insumos(
+                        st.session_state.insumos, 
+                        insumos_usados, 
+                        quantidade_produzida=quantidade_produzida
+                    )
+                    st.success(f"📦 Estoque baixado para {quantidade_produzida} unidade(s) de '{nome_produto}'!")
+
+
                     novo = {
                         "Produto": nome_produto.strip(),
+                        "Qtd Produzida": float(quantidade_produzida), # NOVO: Registra a qtd produzida
                         "Custo Total": float(custo_total),
                         "Preço à Vista": float(preco_vista),
                         "Preço no Cartão": float(preco_cartao),
@@ -914,7 +1022,7 @@ def papelaria_aba():
                         TELEGRAM_CHAT_ID_PROD = "-1003030758192"
                         THREAD_ID_PROD = 43
 
-                        mensagem = f"<b>📦 Novo Produto Cadastrado:</b>\n"
+                        mensagem = f"<b>📦 Novo Produto Cadastrado ({quantidade_produzida} un):</b>\n"
                         mensagem += f"<b>Produto:</b> {nome_produto}\n"
                         mensagem += "<b>Insumos:</b>\n"
 
@@ -923,11 +1031,12 @@ def papelaria_aba():
                             qtd = insumo['Quantidade Usada']
                             un = insumo['Unidade']
                             custo = insumo['Custo']
-                            mensagem += f"• {nome} - {qtd} {un} (R$ {custo:.2f})\n"
+                            mensagem += f"• {nome} - {qtd} {un} por un. (Custo: R$ {custo:.2f})\n"
 
-                        mensagem += f"\n<b>Custo Total:</b> R$ {custo_total:,.2f}"
+                        mensagem += f"\n<b>Custo Unitário:</b> R$ {custo_total:,.2f}"
                         mensagem += f"\n<b>Preço à Vista:</b> R$ {preco_vista:,.2f}"
                         mensagem += f"\n<b>Preço no Cartão:</b> R$ {preco_cartao:,.2f}"
+                        mensagem += f"\n\n🚨 **Estoque dos Insumos foi atualizado.**" # NOVO: Alerta de estoque
 
                         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN_SECRET}/sendMessage"
                         payload = {
@@ -946,7 +1055,7 @@ def papelaria_aba():
                         st.warning(f"⚠️ Falha ao tentar enviar para o Telegram: {e}")
 
                     # 🗃️ Salva no DataFrame local
-                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS_GLOBAL + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
+                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS_GLOBAL + ["Insumos Usados", "Qtd Produzida"] + extras_produtos["Campo"].tolist()))
                     st.session_state.produtos = st.session_state.produtos.reindex(
                         columns=list(set(st.session_state.produtos.columns) | set(todas_cols))
                     )
@@ -979,6 +1088,11 @@ def papelaria_aba():
 
             idxs_p = st.session_state.produtos.index[st.session_state.produtos["Produto"] == produto_selecionado].tolist()
             idx_p = idxs_p[0] if idxs_p else None
+            
+            # NOVO: Variável para controlar se o estoque deve ser atualizado na edição
+            if f"qtd_produzida_{idx_p}" not in st.session_state:
+                st.session_state[f"qtd_produzida_{idx_p}"] = 0
+
 
             if acao_produto == "Excluir" and idx_p is not None:
                 if st.button("Confirmar Exclusão", key=f"excluir_produto_{idx_p}"):
@@ -988,8 +1102,24 @@ def papelaria_aba():
 
             if acao_produto == "Editar" and idx_p is not None:
                 atual_p = st.session_state.produtos.loc[idx_p]
+                
+                # Variável para rastrear a quantidade antes da edição
+                try:
+                    qtd_antiga = float(atual_p.get("Qtd Produzida", 1.0))
+                except ValueError:
+                    qtd_antiga = 1.0
+                
                 with st.form(f"form_edit_produto_{idx_p}"):
                     novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")))
+                    
+                    # NOVO: Edição da quantidade produzida
+                    nova_qtd_produzida = st.number_input(
+                        "Quantidade do Produto Cadastrada/Produzida", 
+                        min_value=1, step=1, 
+                        value=int(qtd_antiga),
+                        key=f"edit_qtd_produzida_{idx_p}"
+                    )
+                    
                     nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
 
                     try:
@@ -1005,6 +1135,9 @@ def papelaria_aba():
 
                     insumos_usados_edit = []
                     novo_custo = 0.0
+
+                    st.markdown("---")
+                    st.markdown("##### Quantidade de Insumos por UNIDADE do Produto (Ajuste)")
 
                     for insumo in insumos_editados:
                         dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
@@ -1059,7 +1192,32 @@ def papelaria_aba():
 
                     salvou_p = st.form_submit_button("Salvar Alterações", key=f"salvar_produto_{idx_p}")
                     if salvou_p:
+                        
+                        # Lógica para recalcular o estoque (apenas se a quantidade produzida mudar)
+                        delta_qtd = nova_qtd_produzida - qtd_antiga
+                        
+                        if delta_qtd != 0:
+                            # Se a quantidade mudou (aumentou ou diminuiu), ajustamos o estoque.
+                            # Para simplificar, vamos desfazer a baixa anterior (com a qtd antiga)
+                            # e aplicar a baixa da nova quantidade (nova_qtd_produzida)
+                            
+                            # Para edição, o ideal é re-aplicar a baixa do consumo unitário,
+                            # pois o consumo unitário também pode ter mudado.
+                            
+                            # OPÇÃO 1 (Simples): Apenas ajustar o estoque para o delta (se for uma edição)
+                            # Se for uma nova produção de 'X' unidades, o delta é 'X'.
+                            # Se for uma correção da qtd produzida, o delta é (nova_qtd - qtd_antiga)
+                            
+                            st.session_state.insumos = baixar_estoque_insumos(
+                                st.session_state.insumos, 
+                                insumos_usados_edit, # Usa o novo consumo unitário
+                                quantidade_produzida=int(delta_qtd) # Baixa ou adiciona o delta
+                            )
+                            st.info(f"Estoque ajustado em {int(delta_qtd)} unidade(s) devido à edição.")
+                            
+                        # Salva as alterações do produto
                         st.session_state.produtos.loc[idx_p, "Produto"] = novo_nome
+                        st.session_state.produtos.loc[idx_p, "Qtd Produzida"] = float(nova_qtd_produzida) # NOVO
                         st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
@@ -1073,8 +1231,6 @@ def papelaria_aba():
         # botão de exportação CSV fora dos forms
         if not st.session_state.produtos.empty:
             baixar_csv_aba(st.session_state.produtos, "produtos_papelaria.csv", key_suffix="produtos") # CORREÇÃO APLICADA AQUI
-            
-# FIM DA FUNÇÃO papelaria_aba()
 
 
 # =====================================
@@ -1095,4 +1251,5 @@ if pagina == "Precificação":
     precificacao_completa()
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
