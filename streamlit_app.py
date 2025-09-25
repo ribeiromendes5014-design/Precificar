@@ -934,10 +934,10 @@ def papelaria_aba():
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
     import streamlit as st
+import pandas as pd
 
-# Suponho que a função garantir_colunas_extras esteja definida assim:
+# Supondo que a função garantir_colunas_extras esteja definida assim:
 def garantir_colunas_extras(df, nome_coluna):
-    # Verifique se a coluna existe, caso contrário, adicione-a
     if nome_coluna not in df.columns:
         df[nome_coluna] = None
     return df
@@ -954,7 +954,11 @@ with aba_produtos:  # Usando o expander
     if 'produtos' not in st.session_state:
         st.session_state.produtos = pd.DataFrame()  # Inicializando o DataFrame, caso não exista
     
-    # Chamando a função para garantir que a coluna "Produtos" existe
+    # Garantindo que a chave 'insumos' exista em st.session_state
+    if 'insumos' not in st.session_state:
+        st.session_state.insumos = pd.DataFrame()  # Inicializando 'insumos' como um DataFrame vazio, caso não exista
+    
+    # Garantindo que a coluna "Produtos" exista no DataFrame de produtos
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
     
     with st.form("form_add_produto"):
@@ -1210,6 +1214,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
