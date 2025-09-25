@@ -1144,12 +1144,6 @@ with aba_produtos:
                             key=key
                         )
 
-                import io
-import pandas as pd
-import streamlit as st
-
-# ... código anterior ...
-
 salvou_p = st.form_submit_button("Salvar Alterações", key=f"salvar_produto_{idx_p}")
 if salvou_p:
     st.session_state.produtos.loc[idx_p, "Produto"] = novo_nome
@@ -1194,6 +1188,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
