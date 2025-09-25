@@ -6,469 +6,455 @@ from io import BytesIO, StringIO
 import base64
 import hashlib
 import ast
-import requests # Importação repetida, mantida apenas uma vez no topo
-
-# Funções auxiliares (exemplo simplificado - não usadas na Precificação final, mas mantidas por contexto)
-# def exibir_precificacao():
-#     st.header("📊 Precificação")
-#     st.write("Conteúdo da aba Precificação aqui...")
-
-# def exibir_papelaria():
-#     st.header("🖋️ Papelaria")
-#     st.write("Conteúdo da aba Papelaria aqui...")
 
 
 # ===============================
-# Funções auxiliares (PDF e Telegram)
+# FUNÇÕES AUXILIARES GLOBAIS
 # ===============================
 
-# Configurações Telegram (Mantidas fora da função para uso global ou secrets)
+# Configurações Telegram
 TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 TELEGRAM_CHAT_ID = "-1003030758192"
 TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
-    pdf.ln(5)
+    # CORRIGIDO: Caractere U+00A0 removido na linha abaixo e em todas as indentações subsequentes
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
+    pdf.ln(5)
 
-    # Configurações de fonte para tabela
-    pdf.set_font("Arial", "B", 12)
+    # Configurações de fonte para tabela
+    pdf.set_font("Arial", "B", 12)
 
-    # Definindo largura das colunas (em mm)
-    col_widths = {
-        "Produto": 50,
-        "Qtd": 15,
-        "Custo Unitário": 35,
-        "Margem (%)": 25,
-        "Preço à Vista": 35,
-        "Preço no Cartão": 35
-    }
+    # Definindo largura das colunas (em mm)
+    col_widths = {
+        "Produto": 50,
+        "Qtd": 15,
+        "Custo Unitário": 35,
+        "Margem (%)": 25,
+        "Preço à Vista": 35,
+        "Preço no Cartão": 35
+    }
 
-    # Cabeçalho da tabela
-    for col_name, width in col_widths.items():
-        pdf.cell(width, 10, col_name, border=1, align='C')
-    pdf.ln()
+    # Cabeçalho da tabela
+    for col_name, width in col_widths.items():
+        pdf.cell(width, 10, col_name, border=1, align='C')
+    pdf.ln()
 
-    # Fonte para corpo da tabela
-    pdf.set_font("Arial", "", 12)
+    # Fonte para corpo da tabela
+    pdf.set_font("Arial", "", 12)
 
-    if df.empty:
-        pdf.cell(sum(col_widths.values()), 10, "Nenhum produto cadastrado.", border=1, align="C")
-        pdf.ln()
-    else:
-        # Itera pelas linhas e escreve na tabela
-        for idx, row in df.iterrows():
-            pdf.cell(col_widths["Produto"], 10, str(row["Produto"]), border=1)
-            pdf.cell(col_widths["Qtd"], 10, str(row["Qtd"]), border=1, align="C")
-            pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {row['Custo Unitário']:.2f}", border=1, align="R")
-            pdf.cell(col_widths["Margem (%)"], 10, f"{row['Margem (%)']:.2f}%", border=1, align="R")
-            pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row['Preço à Vista']:.2f}", border=1, align="R")
-            pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row['Preço no Cartão']:.2f}", border=1, align="R")
-            pdf.ln()
+    if df.empty:
+        pdf.cell(sum(col_widths.values()), 10, "Nenhum produto cadastrado.", border=1, align="C")
+        pdf.ln()
+    else:
+        # Itera pelas linhas e escreve na tabela
+        for idx, row in df.iterrows():
+            pdf.cell(col_widths["Produto"], 10, str(row["Produto"]), border=1)
+            pdf.cell(col_widths["Qtd"], 10, str(row["Qtd"]), border=1, align="C")
+            pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {row['Custo Unitário']:.2f}", border=1, align="R")
+            pdf.cell(col_widths["Margem (%)"], 10, f"{row['Margem (%)']:.2f}%", border=1, align="R")
+            pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row['Preço à Vista']:.2f}", border=1, align="R")
+            pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row['Preço no Cartão']:.2f}", border=1, align="R")
+            pdf.ln()
 
-    pdf_bytes = pdf.output(dest='S').encode('latin1')
-    return BytesIO(pdf_bytes)
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return BytesIO(pdf_bytes)
 
 
 def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
-    files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
-    data = {"chat_id": TELEGRAM_CHAT_ID}
-    if thread_id is not None:
-        data["message_thread_id"] = thread_id
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
+    files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+    data = {"chat_id": TELEGRAM_CHAT_ID}
+    if thread_id is not None:
+        data["message_thread_id"] = thread_id
 
-    response = requests.post(url, data=data, files=files)
-    resp_json = response.json()
-    st.write("DEBUG TELEGRAM PDF:", resp_json)
-    if not resp_json.get("ok"):
-        st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
-    else:
-        st.success("✅ PDF enviado para o Telegram com sucesso!")
+    response = requests.post(url, data=data, files=files)
+    resp_json = response.json()
+    st.write("DEBUG TELEGRAM PDF:", resp_json)
+    if not resp_json.get("ok"):
+        st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
+    else:
+        st.success("✅ PDF enviado para o Telegram com sucesso!")
 
 
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
-    """Exibe os resultados de precificação com tabela e imagens dos produtos."""
-    if df is None or df.empty:
-        st.info("⚠️ Nenhum produto disponível para exibir.")
-        return
+    """Exibe os resultados de precificação com tabela e imagens dos produtos."""
+    if df is None or df.empty:
+        st.info("⚠️ Nenhum produto disponível para exibir.")
+        return
 
-    st.subheader("📊 Resultados da Precificação")
+    st.subheader("📊 Resultados da Precificação")
 
-    for idx, row in df.iterrows():
-        with st.container():
-            cols = st.columns([1, 3])
-            with cols[0]:
-                img_bytes = imagens_dict.get(row.get("Produto"))
-                if img_bytes:
-                    st.image(img_bytes, width=100)
-                elif row.get("Imagem") is not None:
-                    try:
-                        st.image(row.get("Imagem"), width=100)
-                    except Exception:
-                        st.write("🖼️ N/A")
-            with cols[1]:
-                st.markdown(f"**{row.get('Produto', '—')}**")
-                st.write(f"📦 Quantidade: {row.get('Qtd', '—')}")
-                if "Custo Unitário" in df.columns:
-                    st.write(f"💰 Custo Unitário: R$ {row.get('Custo Unitário', 0):.2f}")
-                if "Custos Extras Produto" in df.columns:
-                    st.write(f"🛠 Custos Extras: R$ {row.get('Custos Extras Produto', 0):.2f}")
-                if "Margem (%)" in df.columns:
-                    margem_val = row.get("Margem (%)", 0)
-                    try:
-                        margem_float = float(margem_val)
-                    except Exception:
-                        margem_float = 0
-                    st.write(f"📈 Margem: {margem_float:.2f}%")
-                if "Preço à Vista" in df.columns:
-                    st.write(f"💸 Preço à Vista: R$ {row.get('Preço à Vista', 0):.2f}")
-                if "Preço no Cartão" in df.columns:
-                    st.write(f"💳 Preço no Cartão: R$ {row.get('Preço no Cartão', 0):.2f}")
+    for idx, row in df.iterrows():
+        with st.container():
+            cols = st.columns([1, 3])
+            with cols[0]:
+                img_bytes = imagens_dict.get(row.get("Produto"))
+                if img_bytes:
+                    st.image(img_bytes, width=100)
+                elif row.get("Imagem") is not None:
+                    try:
+                        st.image(row.get("Imagem"), width=100)
+                    except Exception:
+                        st.write("🖼️ N/A")
+            with cols[1]:
+                st.markdown(f"**{row.get('Produto', '—')}**")
+                st.write(f"📦 Quantidade: {row.get('Qtd', '—')}")
+                if "Custo Unitário" in df.columns:
+                    st.write(f"💰 Custo Unitário: R$ {row.get('Custo Unitário', 0):.2f}")
+                if "Custos Extras Produto" in df.columns:
+                    st.write(f"🛠 Custos Extras: R$ {row.get('Custos Extras Produto', 0):.2f}")
+                if "Margem (%)" in df.columns:
+                    margem_val = row.get("Margem (%)", 0)
+                    try:
+                        margem_float = float(margem_val)
+                    except Exception:
+                        margem_float = 0
+                    st.write(f"📈 Margem: {margem_float:.2f}%")
+                if "Preço à Vista" in df.columns:
+                    st.write(f"💸 Preço à Vista: R$ {row.get('Preço à Vista', 0):.2f}")
+                if "Preço no Cartão" in df.columns:
+                    st.write(f"💳 Preço no Cartão: R$ {row.get('Preço no Cartão', 0):.2f}")
 
-    st.markdown("### 📋 Tabela Consolidada")
-    st.dataframe(df, use_container_width=True)
+    st.markdown("### 📋 Tabela Consolidada")
+    st.dataframe(df, use_container_width=True)
 
 
 def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
-                        modo_margem: str, margem_fixa: float) -> pd.DataFrame:
-    if df.empty:
-        return df
+                        modo_margem: str, margem_fixa: float) -> pd.DataFrame:
+    if df.empty:
+        return df
 
-    df = df.copy()
-    rateio_unitario = 0
+    df = df.copy()
+    rateio_unitario = 0
 
-    # Calcular rateio por unidade com base no frete + custos extras
-    if frete_total > 0 or custos_extras > 0:
-        qtd_total = df["Qtd"].sum()
-        if qtd_total > 0:
-            rateio_unitario = (frete_total + custos_extras) / qtd_total
+    # Calcular rateio por unidade com base no frete + custos extras
+    if frete_total > 0 or custos_extras > 0:
+        qtd_total = df["Qtd"].sum()
+        if qtd_total > 0:
+            rateio_unitario = (frete_total + custos_extras) / qtd_total
 
-    # Garantir que a coluna "Custos Extras Produto" exista e esteja limpa
-    if "Custos Extras Produto" not in df.columns:
-        df["Custos Extras Produto"] = 0.0
-    else:
-        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0.0)
+    # Garantir que a coluna "Custos Extras Produto" exista e esteja limpa
+    if "Custos Extras Produto" not in df.columns:
+        df["Custos Extras Produto"] = 0.0
+    else:
+        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0.0)
 
-    # Adicionar o rateio ao custo extra por produto
-    df["Custos Extras Produto"] += rateio_unitario
+    # Adicionar o rateio ao custo extra por produto
+    df["Custos Extras Produto"] += rateio_unitario
 
-    # Garantir que a coluna "Custo Unitário" exista e esteja limpa
-    if "Custo Unitário" not in df.columns:
-        df["Custo Unitário"] = 0.0
-    else:
-        df["Custo Unitário"] = df["Custo Unitário"].fillna(0.0)
+    # Garantir que a coluna "Custo Unitário" exista e esteja limpa
+    if "Custo Unitário" not in df.columns:
+        df["Custo Unitário"] = 0.0
+    else:
+        df["Custo Unitário"] = df["Custo Unitário"].fillna(0.0)
 
-    # Calcular o custo total por unidade
-    df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
+    # Calcular o custo total por unidade
+    df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
-    # Processar margens conforme o modo selecionado
-    if "Margem (%)" not in df.columns:
-        df["Margem (%)"] = margem_fixa
-    else:
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
+    # Processar margens conforme o modo selecionado
+    if "Margem (%)" not in df.columns:
+        df["Margem (%)"] = margem_fixa
+    else:
+        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
 
-    if modo_margem == "Margem fixa":
-        # Apenas sobrescreve onde ainda for NaN (já tratado acima)
-        pass  # Nada mais a fazer, pois já aplicamos fillna acima
-    elif modo_margem == "Margem por produto":
-        # Já foi tratado acima com fillna, então respeita os valores existentes
-        pass
-    else:
-        # Modo desconhecido: ainda assim, usamos a margem fixa como fallback (também já tratado)
-        pass
+    if modo_margem == "Margem fixa":
+        pass
+    elif modo_margem == "Margem por produto":
+        pass
+    else:
+        pass
 
-    # Calcular os preços finais
-    df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
-    df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
+    # Calcular os preços finais
+    df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
+    df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
 
-    return df
+    return df
 
 def load_csv_github(url: str) -> pd.DataFrame:
-    try:
-        response = requests.get(url)
-        response.raise_for_status() # Lança exceção para status ruins
-        df = pd.read_csv(StringIO(response.text))
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar CSV do GitHub: {e}")
-        return pd.DataFrame()
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        df = pd.read_csv(StringIO(response.text))
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar CSV do GitHub: {e}")
+        return pd.DataFrame()
 
 
 def extrair_produtos_pdf(pdf_file) -> list:
-    # Implementação fictícia, substitua pela sua função real de extração
-    st.warning("Função extrair_produtos_pdf ainda não implementada.")
-    return []
+    # Implementação fictícia
+    st.warning("Função extrair_produtos_pdf ainda não implementada.")
+    return []
 
 
 # ==============================================================================
-# FUNÇÃO DA PÁGINA: PRECIFICAÇÃO COMPLETA (CORRIGIDO: TODO CONTEÚDO AQUI)
+# FUNÇÃO DA PÁGINA: PRECIFICAÇÃO COMPLETA (CORRIGIDO: TODO CONTEÚDO ENVOLVIDO)
 # ==============================================================================
 
 def precificacao_completa():
-    st.title("📊 Precificador de Produtos")
+    st.title("📊 Precificador de Produtos")
 
-    # ===============================
-    # Estado da sessão e variáveis fixas (AGORA DENTRO DA FUNÇÃO)
-    # ===============================
-    if "df_produtos_geral" not in st.session_state:
-        st.session_state.df_produtos_geral = pd.DataFrame([
-            {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
-            {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
-        ])
+    # ===============================
+    # Estado da sessão e variáveis fixas
+    # ===============================
+    if "df_produtos_geral" not in st.session_state:
+        st.session_state.df_produtos_geral = pd.DataFrame([
+            {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
+            {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
+        ])
 
-    st.subheader("Produtos cadastrados")
-    st.dataframe(st.session_state.df_produtos_geral)
+    st.subheader("Produtos cadastrados")
+    st.dataframe(st.session_state.df_produtos_geral)
 
-    if st.button("📤 Gerar PDF e enviar para Telegram"):
-        if st.session_state.df_produtos_geral.empty:
-            st.warning("⚠️ Nenhum produto para gerar PDF.")
-        else:
-            pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
-            enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
+    if st.button("📤 Gerar PDF e enviar para Telegram"):
+        if st.session_state.df_produtos_geral.empty:
+            st.warning("⚠️ Nenhum produto para gerar PDF.")
+        else:
+            pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
+            enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
 
-    # Inicialização do estado das abas
-    if "produtos_manuais" not in st.session_state:
-        st.session_state.produtos_manuais = pd.DataFrame(columns=[
-            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
-        ])
-    if "rateio_manual" not in st.session_state:
-        st.session_state["rateio_manual"] = 0.0
+    if "produtos_manuais" not in st.session_state:
+        st.session_state.produtos_manuais = pd.DataFrame(columns=[
+            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
+        ])
+    if "rateio_manual" not in st.session_state:
+        st.session_state["rateio_manual"] = 0.0
 
-    if "frete_manual" not in st.session_state:
-        st.session_state["frete_manual"] = 0.0
-    if "extras_manual" not in st.session_state:
-        st.session_state["extras_manual"] = 0.0
-    if "qtd_total_manual" not in st.session_state:
-        st.session_state["qtd_total_manual"] = 1
+    if "frete_manual" not in st.session_state:
+        st.session_state["frete_manual"] = 0.0
+    if "extras_manual" not in st.session_state:
+        st.session_state["extras_manual"] = 0.0
+    if "qtd_total_manual" not in st.session_state:
+        st.session_state["qtd_total_manual"] = 1
 
-    # Valores padrão para margem
-    if "modo_margem" not in st.session_state:
-        st.session_state["modo_margem"] = "Margem fixa"  # ou "Margem por produto"
-    if "margem_fixa" not in st.session_state:
-        st.session_state["margem_fixa"] = 30.0
+    # Valores padrão para margem
+    if "modo_margem" not in st.session_state:
+        st.session_state["modo_margem"] = "Margem fixa"
+    if "margem_fixa" not in st.session_state:
+        st.session_state["margem_fixa"] = 30.0
 
-    # Inicializar variáveis para uso no processamento
-    frete_total = st.session_state.get("frete_manual", 0.0)
-    custos_extras = st.session_state.get("extras_manual", 0.0)
-    modo_margem = st.session_state.get("modo_margem", "Margem fixa")
-    margem_fixa = st.session_state.get("margem_fixa", 30.0)
+    # Inicializar variáveis para uso no processamento
+    frete_total = st.session_state.get("frete_manual", 0.0)
+    custos_extras = st.session_state.get("extras_manual", 0.0)
+    modo_margem = st.session_state.get("modo_margem", "Margem fixa")
+    margem_fixa = st.session_state.get("margem_fixa", 30.0)
 
-    # URL do CSV do GitHub
-    ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
+    # URL do CSV do GitHub
+    ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
 
-    # Dicionário para armazenar imagens em memória para PDF ou manual
-    imagens_dict = {}  # produto → imagem bytes
+    # Dicionário para armazenar imagens em memória para PDF ou manual
+    imagens_dict = {}
 
-    # Criar as tabs (AGORA DENTRO DA FUNÇÃO!)
-    tab_pdf, tab_manual, tab_github = st.tabs([
-        "📄 Precificador PDF",
-        "✍️ Precificador Manual",
-        "📥 Carregar CSV do GitHub"
-    ])
+    # Criar as tabs
+    tab_pdf, tab_manual, tab_github = st.tabs([
+        "📄 Precificador PDF",
+        "✍️ Precificador Manual",
+        "📥 Carregar CSV do GitHub"
+    ])
 
-    # === Tab PDF ===
-    with tab_pdf:
-        st.markdown("---")
-        pdf_file = st.file_uploader("📤 Selecione o PDF da nota fiscal ou lista de compras", type=["pdf"])
-        if pdf_file:
-            try:
-                produtos_pdf = extrair_produtos_pdf(pdf_file)
-                if not produtos_pdf:
-                    st.warning("⚠️ Nenhum produto encontrado no PDF.")
-                else:
-                    df_pdf = pd.DataFrame(produtos_pdf)
-                    df_pdf["Custos Extras Produto"] = 0.0
-                    df_pdf["Imagem"] = None  # sem imagem para PDF importado
-                    st.session_state.produtos_manuais = df_pdf.copy()
-                    st.session_state.df_produtos_geral = processar_dataframe(
-                        df_pdf,
-                        frete_total,
-                        custos_extras,
-                        modo_margem,
-                        margem_fixa
-                    )
-                    if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-                        exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-                    else:
-                        st.info("⚠️ Nenhum produto processado para exibir.")
+    # === Tab PDF ===
+    with tab_pdf:
+        st.markdown("---")
+        pdf_file = st.file_uploader("📤 Selecione o PDF da nota fiscal ou lista de compras", type=["pdf"])
+        if pdf_file:
+            try:
+                produtos_pdf = extrair_produtos_pdf(pdf_file)
+                if not produtos_pdf:
+                    st.warning("⚠️ Nenhum produto encontrado no PDF.")
+                else:
+                    df_pdf = pd.DataFrame(produtos_pdf)
+                    df_pdf["Custos Extras Produto"] = 0.0
+                    df_pdf["Imagem"] = None
+                    st.session_state.produtos_manuais = df_pdf.copy()
+                    st.session_state.df_produtos_geral = processar_dataframe(
+                        df_pdf,
+                        frete_total,
+                        custos_extras,
+                        modo_margem,
+                        margem_fixa
+                    )
+                    if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+                        exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+                    else:
+                        st.info("⚠️ Nenhum produto processado para exibir.")
 
-            except Exception as e:
-                st.error(f"❌ Erro ao processar o PDF: {e}")
-        else:
-            st.info("📄 Faça upload de um arquivo PDF para começar.")
-            if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
-                df_exemplo = load_csv_github(ARQ_CAIXAS)
-                if not df_exemplo.empty:
-                    df_exemplo["Custos Extras Produto"] = 0.0
-                    df_exemplo["Imagem"] = None
-                    st.session_state.produtos_manuais = df_exemplo.copy()
-                    st.session_state.df_produtos_geral = processar_dataframe(
-                        df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
-                    )
-                    exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+            except Exception as e:
+                st.error(f"❌ Erro ao processar o PDF: {e}")
+        else:
+            st.info("📄 Faça upload de um arquivo PDF para começar.")
+            if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
+                df_exemplo = load_csv_github(ARQ_CAIXAS)
+                if not df_exemplo.empty:
+                    df_exemplo["Custos Extras Produto"] = 0.0
+                    df_exemplo["Imagem"] = None
+                    st.session_state.produtos_manuais = df_exemplo.copy()
+                    st.session_state.df_produtos_geral = processar_dataframe(
+                        df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
+                    )
+                    exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
 
-    # === Tab Manual ===
-    with tab_manual:
-        st.markdown("---")
-        aba_prec_manual, aba_rateio = st.tabs(["✍️ Novo Produto Manual", "🔢 Rateio Manual"])
+    # === Tab Manual ===
+    with tab_manual:
+        st.markdown("---")
+        aba_prec_manual, aba_rateio = st.tabs(["✍️ Novo Produto Manual", "🔢 Rateio Manual"])
 
-        with aba_rateio:
-            st.subheader("🔢 Cálculo de Rateio Unitário (Frete + Custos Extras)")
-            col_r1, col_r2, col_r3 = st.columns(3)
-            with col_r1:
-                frete_manual = st.number_input("🚚 Frete Total (R$)", min_value=0.0, step=0.01, key="frete_manual")
-            with col_r2:
-                extras_manual = st.number_input("🛠 Custos Extras (R$)", min_value=0.0, step=0.01, key="extras_manual")
-            with col_r3:
-                qtd_total_manual = st.number_input("📦 Quantidade Total de Produtos", min_value=1, step=1, key="qtd_total_manual")
+        with aba_rateio:
+            st.subheader("🔢 Cálculo de Rateio Unitário (Frete + Custos Extras)")
+            col_r1, col_r2, col_r3 = st.columns(3)
+            with col_r1:
+                frete_manual = st.number_input("🚚 Frete Total (R$)", min_value=0.0, step=0.01, key="frete_manual")
+            with col_r2:
+                extras_manual = st.number_input("🛠 Custos Extras (R$)", min_value=0.0, step=0.01, key="extras_manual")
+            with col_r3:
+                qtd_total_manual = st.number_input("📦 Quantidade Total de Produtos", min_value=1, step=1, key="qtd_total_manual")
 
-            if qtd_total_manual > 0:
-                rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
-            else:
-                rateio_calculado = 0.0
+            if qtd_total_manual > 0:
+                rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
+            else:
+                rateio_calculado = 0.0
 
-            st.session_state["rateio_manual"] = round(rateio_calculado, 4)
-            st.markdown(f"💰 **Rateio Unitário Calculado:** R$ {rateio_calculado:,.4f}")
+            st.session_state["rateio_manual"] = round(rateio_calculado, 4)
+            st.markdown(f"💰 **Rateio Unitário Calculado:** R$ {rateio_calculado:,.4f}")
 
-        with aba_prec_manual:
-            # Se flag de rerun estiver presente, dispara o rerun e limpa os campos
-            if st.session_state.get("rerun_after_add"):
-                del st.session_state["rerun_after_add"]
-                st.rerun()
+        with aba_prec_manual:
+            if st.session_state.get("rerun_after_add"):
+                del st.session_state["rerun_after_add"]
+                st.rerun()
 
-            st.subheader("Adicionar novo produto")
+            st.subheader("Adicionar novo produto")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                produto = st.text_input("📝 Nome do Produto")
-                quantidade = st.number_input("📦 Quantidade", min_value=1, step=1)
-                valor_pago = st.number_input("💰 Valor Pago (R$)", min_value=0.0, step=0.01)
-                imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
-            with col2:
-                valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
-                custo_extra_produto = st.number_input(
-                    "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
-                )
-                preco_final_sugerido = st.number_input(
-                    "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
-                )
+            col1, col2 = st.columns(2)
+            with col1:
+                produto = st.text_input("📝 Nome do Produto")
+                quantidade = st.number_input("📦 Quantidade", min_value=1, step=1)
+                valor_pago = st.number_input("💰 Valor Pago (R$)", min_value=0.0, step=0.01)
+                imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
+            with col2:
+                valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
+                custo_extra_produto = st.number_input(
+                    "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
+                )
+                preco_final_sugerido = st.number_input(
+                    "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
+                )
 
-            custo_total_unitario = valor_pago + custo_extra_produto
+            custo_total_unitario = valor_pago + custo_extra_produto
 
-            if preco_final_sugerido > 0:
-                margem_calculada = 0.0
-                if custo_total_unitario > 0:
-                    margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
-                margem_manual = round(margem_calculada, 2)
-                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
-                preco_a_vista_calc = preco_final_sugerido
-                preco_no_cartao_calc = preco_final_sugerido / 0.8872
-            else:
-                margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
-                preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
-                preco_no_cartao_calc = preco_a_vista_calc / 0.8872
+            if preco_final_sugerido > 0:
+                margem_calculada = 0.0
+                if custo_total_unitario > 0:
+                    margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
+                margem_manual = round(margem_calculada, 2)
+                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
+                preco_a_vista_calc = preco_final_sugerido
+                preco_no_cartao_calc = preco_final_sugerido / 0.8872
+            else:
+                margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
+                preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
+                preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
-            st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
-            st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
+            st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
+            st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
 
-            with st.form("form_submit_manual"):
-                adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
-                if adicionar_produto:
-                    if produto and quantidade > 0 and valor_pago >= 0:
-                        imagem_bytes = None
-                        if imagem_file is not None:
-                            imagem_bytes = imagem_file.read()
-                            imagens_dict[produto] = imagem_bytes
+            with st.form("form_submit_manual"):
+                adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
+                if adicionar_produto:
+                    if produto and quantidade > 0 and valor_pago >= 0:
+                        imagem_bytes = None
+                        if imagem_file is not None:
+                            imagem_bytes = imagem_file.read()
+                            imagens_dict[produto] = imagem_bytes
 
-                        novo_produto = pd.DataFrame([{
-                            "Produto": produto,
-                            "Qtd": quantidade,
-                            "Custo Unitário": valor_pago,
-                            "Custos Extras Produto": custo_extra_produto,
-                            "Margem (%)": margem_manual,
-                            "Imagem": imagem_bytes
-                        }])
-                        st.session_state.produtos_manuais = pd.concat(
-                            [st.session_state.produtos_manuais, novo_produto],
-                            ignore_index=True
-                        )
-                        st.session_state.df_produtos_geral = processar_dataframe(
-                            st.session_state.produtos_manuais,
-                            frete_total,
-                            custos_extras,
-                            modo_margem,
-                            margem_fixa
-                        )
-                        st.success("✅ Produto adicionado!")
-                        st.session_state["rerun_after_add"] = True  # ← Adiciona flag aqui
-                    else:
-                        st.warning("⚠️ Preencha todos os campos obrigatórios.")
+                        novo_produto = pd.DataFrame([{
+                            "Produto": produto,
+                            "Qtd": quantidade,
+                            "Custo Unitário": valor_pago,
+                            "Custos Extras Produto": custo_extra_produto,
+                            "Margem (%)": margem_manual,
+                            "Imagem": imagem_bytes
+                        }])
+                        st.session_state.produtos_manuais = pd.concat(
+                            [st.session_state.produtos_manuais, novo_produto],
+                            ignore_index=True
+                        )
+                        st.session_state.df_produtos_geral = processar_dataframe(
+                            st.session_state.produtos_manuais,
+                            frete_total,
+                            custos_extras,
+                            modo_margem,
+                            margem_fixa
+                        )
+                        st.success("✅ Produto adicionado!")
+                        st.session_state["rerun_after_add"] = True
+                    else:
+                        st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
-            st.markdown("---")
-            st.subheader("Produtos cadastrados")
+            st.markdown("---")
+            st.subheader("Produtos cadastrados")
 
-            # Exibir produtos com botão de exclusão
-            produtos = st.session_state.produtos_manuais
+            # Exibir produtos com botão de exclusão
+            produtos = st.session_state.produtos_manuais
 
-            if produtos.empty:
-                st.info("⚠️ Nenhum produto cadastrado.")
-            else:
-                if "produto_para_excluir" not in st.session_state:
-                    st.session_state["produto_para_excluir"] = None
+            if produtos.empty:
+                st.info("⚠️ Nenhum produto cadastrado.")
+            else:
+                if "produto_para_excluir" not in st.session_state:
+                    st.session_state["produto_para_excluir"] = None
 
-                for i, row in produtos.iterrows():
-                    cols = st.columns([4, 1])
-                    with cols[0]:
-                        st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário: R$ {row['Custo Unitário']:.2f}")
-                    with cols[1]:
-                        if st.button(f"❌ Excluir", key=f"excluir_{i}"):
-                            st.session_state["produto_para_excluir"] = i
+                for i, row in produtos.iterrows():
+                    cols = st.columns([4, 1])
+                    with cols[0]:
+                        st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário: R$ {row['Custo Unitário']:.2f}")
+                    with cols[1]:
+                        if st.button(f"❌ Excluir", key=f"excluir_{i}"):
+                            st.session_state["produto_para_excluir"] = i
 
-                if st.session_state["produto_para_excluir"] is not None:
-                    i = st.session_state["produto_para_excluir"]
-                    st.session_state.produtos_manuais = produtos.drop(i).reset_index(drop=True)
+                if st.session_state["produto_para_excluir"] is not None:
+                    i = st.session_state["produto_para_excluir"]
+                    st.session_state.produtos_manuais = produtos.drop(i).reset_index(drop=True)
 
-                    # Atualizar df_produtos_geral também para refletir exclusão
-                    st.session_state.df_produtos_geral = processar_dataframe(
-                        st.session_state.produtos_manuais,
-                        frete_total,
-                        custos_extras,
-                        modo_margem,
-                        margem_fixa
-                    )
+                    # Atualizar df_produtos_geral também para refletir exclusão
+                    st.session_state.df_produtos_geral = processar_dataframe(
+                        st.session_state.produtos_manuais,
+                        frete_total,
+                        custos_extras,
+                        modo_margem,
+                        margem_fixa
+                    )
 
-                    # Resetar variável para evitar loop infinito
-                    st.session_state["produto_para_excluir"] = None
+                    # Resetar variável para evitar loop infinito
+                    st.session_state["produto_para_excluir"] = None
 
-                    st.rerun()
+                    st.rerun()
 
-            # Exibir resultados após possíveis alterações, fora do form
-            if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-            else:
-                st.info("⚠️ Nenhum produto processado para exibir.")
+            # Exibir resultados após possíveis alterações, fora do form
+            if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+            else:
+                st.info("⚠️ Nenhum produto processado para exibir.")
 
-    # === Tab GitHub ===
-    with tab_github:
-        st.markdown("---")
-        st.header("📥 Carregar CSV de Precificação do GitHub")
-        if st.button("🔄 Carregar CSV do GitHub (Tab GitHub)"):
-            df_exemplo = load_csv_github(ARQ_CAIXAS)
-            if not df_exemplo.empty:
-                df_exemplo["Custos Extras Produto"] = 0.0
-                df_exemplo["Imagem"] = None
-                st.session_state.produtos_manuais = df_exemplo.copy()
-                st.session_state.df_produtos_geral = processar_dataframe(
-                    df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
-                )
-                st.success("✅ CSV carregado e processado com sucesso!")
-                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-            else:
-                st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
+    # === Tab GitHub ===
+    with tab_github:
+        st.markdown("---")
+        st.header("📥 Carregar CSV de Precificação do GitHub")
+        if st.button("🔄 Carregar CSV do GitHub (Tab GitHub)"):
+            df_exemplo = load_csv_github(ARQ_CAIXAS)
+            if not df_exemplo.empty:
+                df_exemplo["Custos Extras Produto"] = 0.0
+                df_exemplo["Imagem"] = None
+                st.session_state.produtos_manuais = df_exemplo.copy()
+                st.session_state.df_produtos_geral = processar_dataframe(
+                    df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
+                )
+                st.success("✅ CSV carregado e processado com sucesso!")
+                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+            else:
+                st.warning("⚠️ Não foi possível carregar o CSV do GitHub.")
 
 
 
@@ -1252,6 +1238,7 @@ if pagina == "Precificação":
     precificacao_completa() # Chama a função que você criou no Passo 1
 elif pagina == "Papelaria":
     papelaria_aba()         # Chama a função que já existia
+
 
 
 
