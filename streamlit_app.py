@@ -937,10 +937,10 @@ def papelaria_aba():
 # Aba Produtos
 # =====================================
 with aba_produtos:
-st.header("Produtos")
+    st.header("Produtos")
 
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
-
+    
     with st.form("form_add_produto"):
         st.subheader("Adicionar novo produto")
         nome_produto = st.text_input("Nome do Produto")
@@ -1198,6 +1198,7 @@ if pagina == "Precificação":
 st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
 papelaria_aba()
+
 
 
 
