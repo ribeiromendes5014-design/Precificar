@@ -530,6 +530,12 @@ import hashlib
 def papelaria_aba():
     st.write("📚 Gerenciador Papelaria Personalizada")
 
+    # Criação das abas
+# ---------------------
+aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
+    
+    
+    
     # ---------------------
     # Token e repositório GitHub
     # ---------------------
@@ -1271,6 +1277,7 @@ if pagina == "Precificação":
     precificacao_completa() # Chama a função que você criou no Passo 1
 elif pagina == "Papelaria":
     papelaria_aba()         # Chama a função que já existia
+
 
 
 
