@@ -814,8 +814,39 @@ from reportlab.pdfgen import canvas
 import ast
 import streamlit as st
 import pandas as pd
+
+# Colunas base dos produtos
 PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Margem (%)", "Preço à Vista", "Preço no Cartão"]
 
+# Função dummy para col_defs_para (substitua pela sua implementação real)
+def col_defs_para(tipo):
+    # Exemplo de definição de colunas extras para "Produtos"
+    if tipo == "Produtos":
+        # Exemplo: campos extras, você pode modificar conforme necessidade
+        return pd.DataFrame([
+            {"Campo": "Categoria", "Tipo": "select", "Opções": ["Papelaria", "Eletrônicos", "Alimentos"]},
+            {"Campo": "Descrição", "Tipo": "text", "Opções": None},
+        ])
+    return pd.DataFrame()
+
+# Função para renderizar input conforme tipo - dummy, substitua pela sua implementação
+def render_input_por_tipo(label, tipo, opcoes, valor_padrao, key):
+    if tipo == "select" and opcoes:
+        return st.selectbox(label, opcoes, index=opcoes.index(valor_padrao) if valor_padrao in opcoes else 0, key=key)
+    elif tipo == "number":
+        return st.number_input(label, value=float(valor_padrao) if valor_padrao else 0.0, key=key)
+    else:  # text e outros tipos
+        return st.text_input(label, value=valor_padrao if valor_padrao else "", key=key)
+
+def garantir_colunas_extras(df, tipo):
+    col_defs = col_defs_para(tipo)
+    if col_defs.empty:
+        return df
+    for _, row in col_defs.iterrows():
+        campo = row["Campo"]
+        if campo not in df.columns:
+            df[campo] = None
+    return df
 
 def gerar_pdf_produto(dados_produto):
     buffer = BytesIO()
@@ -881,16 +912,28 @@ def gerar_pdf_produto(dados_produto):
     return buffer
 
 
-def garantir_colunas_extras(df, tipo):
-    col_defs = col_defs_para(tipo)
-    if col_defs.empty:
-        return df
+# Exemplo de inicialização do Streamlit com abas (importante para evitar NameError)
+def main():
+    # Inicializa session_state se não existir
+    if "produtos" not in st.session_state:
+        st.session_state.produtos = pd.DataFrame(columns=PRODUTOS_BASE_COLS)
+    if "insumos" not in st.session_state:
+        st.session_state.insumos = pd.DataFrame(columns=["Nome", "Preço Unitário (R$)", "Unidade"])
 
-    for _, row in col_defs.iterrows():
-        campo = row["Campo"]
-        if campo not in df.columns:
-            df[campo] = None
-    return df
+    aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
+
+    with aba_produtos:
+        st.header("Produtos")
+
+        st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+
+        st.write("Aqui você pode adicionar a implementação da aba produtos...")
+
+        # Exemplo básico para mostrar os produtos
+        st.dataframe(st.session_state.produtos)
+
+if __name__ == "__main__":
+    main()
 
 # =====================================
 # Aba Produtos
@@ -1132,6 +1175,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
