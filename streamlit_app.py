@@ -935,6 +935,11 @@ def main():
 if __name__ == "__main__":
     main()
 
+import ast
+import io
+import pandas as pd
+import streamlit as st
+
 # =====================================
 # Aba Produtos
 # =====================================
@@ -1076,7 +1081,7 @@ with aba_produtos:
         if acao_produto == "Editar" and idx_p is not None:
             atual_p = st.session_state.produtos.loc[idx_p]
             with st.form(f"form_edit_produto_{idx_p}"):
-                novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")))
+                novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto", "")))
                 nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
 
                 try:
@@ -1144,18 +1149,19 @@ with aba_produtos:
                             key=key
                         )
 
-salvou_p = st.form_submit_button("Salvar Alterações", key=f"salvar_produto_{idx_p}")
-if salvou_p:
-    st.session_state.produtos.loc[idx_p, "Produto"] = novo_nome
-    st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
-    st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
-    st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-    st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
-    st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
-    for k, v in valores_extras_edit_p.items():
-        st.session_state.produtos.loc[idx_p, k] = v
-    st.success("Produto atualizado!")
-    st.rerun()
+                salvou_p = st.form_submit_button("Salvar Alterações", key=f"salvar_produto_{idx_p}")
+                if salvou_p:
+                    st.session_state.produtos.loc[idx_p, "Produto"] = novo_nome
+                    st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
+                    st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
+                    st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
+                    st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
+                    st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
+                    for k, v in valores_extras_edit_p.items():
+                        st.session_state.produtos.loc[idx_p, k] = v
+                    st.success("Produto atualizado!")
+                    st.rerun()
+
 
 def baixar_csv(df: pd.DataFrame, nome_arquivo: str):
     if df.empty:
@@ -1188,6 +1194,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
