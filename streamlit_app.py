@@ -537,13 +537,21 @@ def papelaria_aba():
 
     # Estado da sessão
     if "insumos" not in st.session_state:
-        st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL)
+        st.session_state.insumos = load_csv_github(INSUMOS_CSV_URL) # CORRIGIDO: Usando load_csv_github
 
     if "produtos" not in st.session_state:
-        st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL)
+        st.session_state.produtos = load_csv_github(PRODUTOS_CSV_URL) # CORRIGIDO: Usando load_csv_github
 
     if "campos" not in st.session_state:
-        st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
+        # CORRIGIDO: load_csv_github só aceita 1 argumento. 
+        # Carregamos e depois garantimos as colunas com base no comportamento desejado.
+        df_campos = load_csv_github(CAMPOS_CSV_URL) 
+        if df_campos.empty:
+            st.session_state.campos = pd.DataFrame(columns=COLUNAS_CAMPOS)
+        else:
+            # Garante que o DataFrame de campos tenha o esquema correto, 
+            # assumindo que COLUNAS_CAMPOS é uma variável global com a lista de colunas esperadas.
+            st.session_state.campos = df_campos.reindex(columns=COLUNAS_CAMPOS, fill_value="")
         
     # Inicializações de estado
     if "campos" not in st.session_state:
@@ -1087,3 +1095,4 @@ if pagina == "Precificação":
     precificacao_completa()
 elif pagina == "Papelaria":
     papelaria_aba()
+
