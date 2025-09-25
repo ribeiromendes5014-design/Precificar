@@ -539,32 +539,6 @@ def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
     else:
         return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
 
-    # ---------------------
-    # Utilitário para converter opções CSV em lista
-    # ---------------------
-    def _opcoes_para_lista(opcoes_str):
-        if pd.isna(opcoes_str) or not str(opcoes_str).strip():
-            return []
-        return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
-
-    # ---------------------
-    # Função para retornar definições de colunas extras filtrando por aplicação
-    # ---------------------
-    def col_defs_para(aplicacao: str):
-        df = st.session_state.campos
-        if df.empty:
-            return df
-        return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
-
-    # ---------------------
-    # Garante colunas extras conforme definições para a aplicação
-    # ---------------------
-    def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
-        defs = col_defs_para(aplicacao)
-        for campo in defs["Campo"].tolist():
-            if campo not in df.columns:
-                df[campo] = ""
-        return df
 
     # ---------------------
     # Renderiza input baseado no tipo de campo
@@ -1141,6 +1115,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
