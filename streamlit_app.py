@@ -28,29 +28,68 @@ def exibir_papelaria():
 
 
 import streamlit as st
-from telegram import Bot
+import pandas as pd
+import requests
+from fpdf import FPDF
+from io import BytesIO
 
-# --- Configurações Telegram ---
-TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
-GRUPO_ID = -1003030758192
+TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
+TELEGRAM_CHAT_ID = "-1003030758192"
+TOPICO_ID = 28
 
-# --- Função para enviar mensagem simples ---
-def enviar_mensagem_telegram():
-    bot = Bot(token=TOKEN)
-    try:
-        bot.send_message(
-            chat_id=GRUPO_ID,
-            text="Olá! Esta é uma mensagem de teste enviada pelo bot."
-        )
-        st.success("✅ Mensagem enviada para o Telegram com sucesso!")
-    except Exception as e:
-        st.error(f"Erro ao enviar mensagem: {e}")
+def gerar_pdf(df: pd.DataFrame) -> BytesIO:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
+    pdf.ln(10)
+    pdf.set_font("Arial", "", 12)
+    if df.empty:
+        pdf.cell(0, 10, "Nenhum produto cadastrado.", 0, 1)
+    else:
+        for idx, row in df.iterrows():
+            pdf.cell(0, 8, f"Produto: {row['Produto']}", 0, 1)
+            pdf.cell(0, 8, f"Quantidade: {row['Qtd']}", 0, 1)
+            pdf.cell(0, 8, f"Custo Unitário: R$ {row['Custo Unitário']:.2f}", 0, 1)
+            pdf.cell(0, 8, f"Margem (%): {row['Margem (%)']:.2f}%", 0, 1)
+            pdf.cell(0, 8, f"Preço à Vista: R$ {row['Preço à Vista']:.2f}", 0, 1)
+            pdf.cell(0, 8, f"Preço no Cartão: R$ {row['Preço no Cartão']:.2f}", 0, 1)
+            pdf.ln(5)
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return BytesIO(pdf_bytes)
 
-# --- Streamlit ---
-st.title("Teste de Envio Telegram")
+def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
+    files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+    data = {"chat_id": TELEGRAM_CHAT_ID}
+    if thread_id is not None:
+        data["message_thread_id"] = thread_id
+    response = requests.post(url, data=data, files=files)
+    resp_json = response.json()
+    st.write("DEBUG TELEGRAM PDF:", resp_json)
+    if not resp_json.get("ok"):
+        st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
+    else:
+        st.success("✅ PDF enviado para o Telegram com sucesso!")
 
-if st.button("Enviar mensagem teste para Telegram"):
-    enviar_mensagem_telegram()
+# Streamlit app
+st.title("📊 Precificador de Produtos")
+
+if "df_produtos_geral" not in st.session_state:
+    st.session_state.df_produtos_geral = pd.DataFrame([
+        {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
+        {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
+    ])
+
+st.subheader("Produtos cadastrados")
+st.dataframe(st.session_state.df_produtos_geral)
+
+if st.button("📤 Gerar PDF e enviar para Telegram"):
+    if st.session_state.df_produtos_geral.empty:
+        st.warning("⚠️ Nenhum produto para gerar PDF.")
+    else:
+        pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
+        enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
 
 
 
@@ -1091,6 +1130,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
