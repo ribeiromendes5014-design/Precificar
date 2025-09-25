@@ -933,9 +933,6 @@ def papelaria_aba():
         if st.button("📤 Salvar INSUMOS no GitHub"):
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
-    import streamlit as st
-import pandas as pd
-import requests
 
 # Supondo que a função garantir_colunas_extras esteja definida assim:
 def garantir_colunas_extras(df, nome_coluna):
@@ -1209,6 +1206,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
