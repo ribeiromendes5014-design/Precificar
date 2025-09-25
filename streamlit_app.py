@@ -505,39 +505,39 @@ def papelaria_aba():
         )
 
     def _opcoes_para_lista(opcoes_str):
-        if pd.isna(opcoes_str) or not str(opcoes_str).strip():
-            return []
-        return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
+    if pd.isna(opcoes_str) or not str(opcoes_str).strip():
+        return []
+    return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
 
-    def col_defs_para(aplicacao: str):
-        """Retorna DataFrame de campos extras filtrando por aplicação."""
-        df = st.session_state.campos
-        if df.empty:
-            return df
-        return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
-
-    def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
-        """Garante que o DataFrame tenha as colunas extras definidas para a aplicação."""
-        defs = col_defs_para(aplicacao)
-        for campo in defs["Campo"].tolist():
-            if campo not in df.columns:
-                df[campo] = ""
+def col_defs_para(aplicacao: str):
+    """Retorna DataFrame de campos extras filtrando por aplicação."""
+    df = st.session_state.campos
+    if df.empty:
         return df
+    return df[(df["Aplicação"] == aplicacao) | (df["Aplicação"] == "Ambos")].copy()
 
-    def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
-        """Renderiza o widget apropriado conforme o tipo de campo."""
-        if tipo == "Número":
-            valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
-            return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
-        elif tipo == "Seleção":
-            lista = _opcoes_para_lista(opcoes)
-            if not lista:
-                return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
-            if valor_padrao not in lista and valor_padrao not in (None, "", "nan"):
-                lista = [str(valor_padrao)] + [o for o in lista if o != valor_padrao]
-            return st.selectbox(label, options=lista, index=0 if valor_padrao in (None, "", "nan") else lista.index(str(valor_padrao)), key=key)
-        else:
+def garantir_colunas_extras(df: pd.DataFrame, aplicacao: str) -> pd.DataFrame:
+    """Garante que o DataFrame tenha as colunas extras definidas para a aplicação."""
+    defs = col_defs_para(aplicacao)
+    for campo in defs["Campo"].tolist():
+        if campo not in df.columns:
+            df[campo] = ""
+    return df
+
+def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
+    """Renderiza o widget apropriado conforme o tipo de campo."""
+    if tipo == "Número":
+        valor = float(valor_padrao) if (valor_padrao is not None and str(valor_padrao).strip() != "") else 0.0
+        return st.number_input(label, min_value=0.0, format="%.2f", value=valor, key=key)
+    elif tipo == "Seleção":
+        lista = _opcoes_para_lista(opcoes)
+        if not lista:
             return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
+        if valor_padrao not in lista and valor_padrao not in (None, "", "nan"):
+            lista = [str(valor_padrao)] + [o for o in lista if o != valor_padrao]
+        return st.selectbox(label, options=lista, index=0 if valor_padrao in (None, "", "nan") else lista.index(str(valor_padrao)), key=key)
+    else:
+        return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
 
     # ---------------------
     # Utilitário para converter opções CSV em lista
@@ -1141,6 +1141,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
