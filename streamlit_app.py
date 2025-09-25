@@ -946,6 +946,8 @@ def garantir_colunas_extras(df, nome_coluna):
 # =====================================
 # Aba Produtos
 # =====================================
+with aba_produtos:
+    st.header("Produtos")
 aba_produtos = st.expander("Produtos")  # Definindo o expander
 
 
@@ -1209,6 +1211,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
