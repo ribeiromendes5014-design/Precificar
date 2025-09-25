@@ -936,7 +936,9 @@ def papelaria_aba():
     ## =====================================
 # Aba Produtos
 # =====================================
-with aba_produtos:
+aba_produtos = st.expander("Produtos")  # Definindo o expander
+
+with aba_produtos:  # Usando o expander
     st.header("Produtos")
 
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
@@ -1194,6 +1196,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
