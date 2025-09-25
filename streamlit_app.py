@@ -818,10 +818,14 @@ with aba_campos:
                         st.success("Campo atualizado!")
                         st.rerun()
 
-    st.divider()
-    baixar_csv(st.session_state.campos, "campos_papelaria.csv")
-    if st.button("📤 Salvar CAMPO no GitHub"):
-        salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "campos_papelaria.csv", st.session_state.campos, GITHUB_BRANCH)
+    def baixar_csv(df, nome_arquivo):
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Baixar CSV",
+        data=csv,
+        file_name=nome_arquivo,
+        mime='text/csv',
+    )
 
 # =====================================
 # Aba Insumos
@@ -1220,6 +1224,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
