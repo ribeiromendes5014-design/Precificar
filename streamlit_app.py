@@ -25,6 +25,39 @@ def exibir_papelaria():
 # ===============================
 # Funções auxiliares
 # ===============================
+
+
+import streamlit as st
+from telegram import Bot
+import pandas as pd
+
+# Token e IDs fixos do Telegram
+TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
+GRUPO_ID = -1003030758192
+TOPICO_ID = 28
+
+def enviar_pdf_telegram(caminho_pdf):
+    bot = Bot(token=TOKEN)
+    with open(caminho_pdf, "rb") as arquivo:
+        bot.send_document(
+            chat_id=GRUPO_ID,
+            document=arquivo,
+            message_thread_id=TOPICO_ID,
+            caption="📄 Aqui está o PDF com a precificação."
+        )
+    st.success("PDF enviado para o Telegram com sucesso!")
+
+# ===============================
+# Funções auxiliares
+# ===============================
+def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
+    # ... seu código aqui ...
+
+
+
+
+
+
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
     """Exibe os resultados de precificação com tabela e imagens dos produtos."""
     if df is None or df.empty:
@@ -1054,6 +1087,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
