@@ -352,7 +352,7 @@ with tab_manual:
                 # Resetar variável para evitar loop infinito
                 st.session_state["produto_para_excluir"] = None
 
-                st.experimental_rerun()
+                st.rerun()
 
         # Exibir resultados após possíveis alterações, fora do form
         if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
@@ -1034,6 +1034,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
