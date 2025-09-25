@@ -1262,12 +1262,18 @@ pagina = st.sidebar.radio(
 )
 
 # =====================================
-# Roteamento das páginas
+# Roteamento das páginas (no final do arquivo)
 # =====================================
+pagina = st.sidebar.radio(
+    "Escolha a página:",
+    ["Precificação", "Papelaria"]
+)
+
 if pagina == "Precificação":
-    precificacao_completa() # AGORA, CHAMA A FUNÇÃO COMPLETA
+    precificacao_completa() # Agora a função existe
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
