@@ -933,7 +933,16 @@ def papelaria_aba():
         if st.button("📤 Salvar INSUMOS no GitHub"):
             salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
-    ## =====================================
+    import streamlit as st
+
+# Suponho que a função garantir_colunas_extras esteja definida assim:
+def garantir_colunas_extras(df, nome_coluna):
+    # Verifique se a coluna existe, caso contrário, adicione-a
+    if nome_coluna not in df.columns:
+        df[nome_coluna] = None
+    return df
+
+# =====================================
 # Aba Produtos
 # =====================================
 aba_produtos = st.expander("Produtos")  # Definindo o expander
@@ -941,6 +950,11 @@ aba_produtos = st.expander("Produtos")  # Definindo o expander
 with aba_produtos:  # Usando o expander
     st.header("Produtos")
 
+    # Garantindo que a coluna "Produtos" exista em st.session_state.produtos
+    if 'produtos' not in st.session_state:
+        st.session_state.produtos = pd.DataFrame()  # Inicializando o DataFrame, caso não exista
+    
+    # Chamando a função para garantir que a coluna "Produtos" existe
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
     
     with st.form("form_add_produto"):
@@ -1196,6 +1210,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
