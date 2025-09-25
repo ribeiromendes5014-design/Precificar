@@ -948,10 +948,7 @@ def garantir_colunas_extras(df, nome_coluna):
 # =====================================
 with aba_produtos:
     st.header("Produtos")
-aba_produtos = st.expander("Produtos")  # Definindo o expander
 
-
-    
     with st.form("form_add_produto"):
         st.subheader("Adicionar novo produto")
         nome_produto = st.text_input("Nome do Produto")
@@ -966,6 +963,7 @@ aba_produtos = st.expander("Produtos")  # Definindo o expander
 
         insumos_usados = []
         custo_total = 0.0
+
 
         for insumo in insumos_selecionados:
             dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
@@ -1211,6 +1209,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
