@@ -973,6 +973,14 @@ with aba_insumos:
         salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
 
+     if st.button("📤 Salvar PRODUTOS no GitHub"):
+    salvar_csv_no_github(
+        GITHUB_TOKEN,
+        GITHUB_REPO,
+        "produtos_papelaria.csv",
+        st.session_state.produtos,
+        GITHUB_BRANCH
+    )
 
 
 
@@ -1244,6 +1252,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
