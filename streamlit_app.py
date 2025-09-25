@@ -396,6 +396,17 @@ import requests
 from io import StringIO
 import hashlib
 
+# ================================
+# Funções utilitárias globais
+# ================================
+def baixar_csv(df, nome_arquivo):
+    csv = df.to_csv(index=False, encoding="utf-8-sig")
+    st.download_button(
+        f"⬇️ Baixar {nome_arquivo}",
+        data=csv,
+        file_name=nome_arquivo,
+        mime="text/csv"
+    )
 
 
 # =====================================
@@ -1130,6 +1141,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
