@@ -935,6 +935,7 @@ def papelaria_aba():
 
     import streamlit as st
 import pandas as pd
+import requests
 
 # Supondo que a função garantir_colunas_extras esteja definida assim:
 def garantir_colunas_extras(df, nome_coluna):
@@ -965,7 +966,12 @@ with aba_produtos:  # Usando o expander
         st.subheader("Adicionar novo produto")
         nome_produto = st.text_input("Nome do Produto")
 
-        insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
+        # Verificar se a coluna "Nome" está presente em insumos
+        if 'Nome' in st.session_state.insumos.columns:
+            insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
+        else:
+            insumos_disponiveis = []
+
         insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
 
         insumos_usados = []
@@ -1209,11 +1215,13 @@ with aba_produtos:  # Usando o expander
 
 
 
+
 if pagina == "Precificação":
     # exibir_precificacao()  # substitua com sua função de precificação
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
