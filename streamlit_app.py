@@ -169,15 +169,14 @@ def extrair_produtos_pdf(pdf_file) -> list:
 
 
 # Funções auxiliares da Papelaria (Mantidas no escopo global para acesso)
-def baixar_csv_aba(df, nome_arquivo, key_suffix=""): # Adicione key_suffix
+def baixar_csv_aba(df, nome_arquivo, key_suffix=""): # Adiciona key_suffix
     csv = df.to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
         f"⬇️ Baixar {nome_arquivo}",
         data=csv,
         file_name=nome_arquivo,
         mime="text/csv",
-        # Use o sufixo para garantir que a chave seja exclusiva por aba
-        key=f"download_button_{nome_arquivo.replace('.', '_')}_{key_suffix}"
+        key=f"download_button_{nome_arquivo.replace('.', '_')}_{key_suffix}" # Usa o sufixo
     )
 
 def _opcoes_para_lista(opcoes_str):
@@ -1064,5 +1063,6 @@ if pagina == "Precificação":
     precificacao_completa()
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
