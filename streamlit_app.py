@@ -878,6 +878,15 @@ def gerar_pdf_produto(dados_produto):
     buffer.seek(0)
     return buffer
 
+import streamlit as st
+
+# Simulando dados para o exemplo funcionar
+st.session_state.insumos = st.session_state.get("insumos", pd.DataFrame(columns=["Nome", "Preço Unitário (R$)", "Unidade"]))
+st.session_state.produtos = st.session_state.get("produtos", pd.DataFrame())
+
+# Criação das abas
+aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
+
 # =====================================
 # Aba Produtos
 # =====================================
@@ -1117,6 +1126,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
