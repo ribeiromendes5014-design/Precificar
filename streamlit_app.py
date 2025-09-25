@@ -755,70 +755,70 @@ with aba_campos:
                     st.rerun()
 
     st.markdown("### Campos cadastrados")
-    if st.session_state.campos.empty:
-        st.info("Nenhum campo extra cadastrado ainda.")
-    else:
-        st.dataframe(st.session_state.campos, use_container_width=True)
+if st.session_state.campos.empty:
+    st.info("Nenhum campo extra cadastrado ainda.")
+else:
+    st.dataframe(st.session_state.campos, use_container_width=True)
 
-    if not st.session_state.campos.empty:
-        st.divider()
-        st.subheader("Editar ou Excluir campo")
-        rotulos = [
-            f"{row.Campo}  ·  ({row.Aplicação})"
-            for _, row in st.session_state.campos.iterrows()
-        ]
-        escolha = st.selectbox("Escolha um campo", [""] + rotulos)
-        if escolha:
-            idx = rotulos.index(escolha)
-            campo_atual = st.session_state.campos.iloc[idx]
-            acao_campo = st.radio(
-                "Ação",
-                ["Nenhuma", "Editar", "Excluir"],
-                horizontal=True,
-                key=f"acao_campo_{idx}"
-            )
-            if acao_campo == "Excluir":
-                if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
-                    nome = campo_atual["Campo"]
-                    aplic = campo_atual["Aplicação"]
-                    st.session_state.campos = st.session_state.campos.drop(st.session_state.campos.index[idx]).reset_index(drop=True)
-                    if aplic in ("Insumos", "Ambos"):
-                        if nome in st.session_state.insumos.columns:
-                            st.session_state.insumos = st.session_state.insumos.drop(columns=[nome])
-                    if aplic in ("Produtos", "Ambos"):
-                        if nome in st.session_state.produtos.columns:
-                            st.session_state.produtos = st.session_state.produtos.drop(columns=[nome])
-                    st.success(f"Campo '{nome}' removido de {aplic}!")
+if not st.session_state.campos.empty:
+    st.divider()
+    st.subheader("Editar ou Excluir campo")
+    rotulos = [
+        f"{row.Campo}  ·  ({row.Aplicação})"
+        for _, row in st.session_state.campos.iterrows()
+    ]
+    escolha = st.selectbox("Escolha um campo", [""] + rotulos)
+    if escolha:
+        idx = rotulos.index(escolha)
+        campo_atual = st.session_state.campos.iloc[idx]
+        acao_campo = st.radio(
+            "Ação",
+            ["Nenhuma", "Editar", "Excluir"],
+            horizontal=True,
+            key=f"acao_campo_{idx}"
+        )
+        if acao_campo == "Excluir":
+            if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
+                nome = campo_atual["Campo"]
+                aplic = campo_atual["Aplicação"]
+                st.session_state.campos = st.session_state.campos.drop(st.session_state.campos.index[idx]).reset_index(drop=True)
+                if aplic in ("Insumos", "Ambos"):
+                    if nome in st.session_state.insumos.columns:
+                        st.session_state.insumos = st.session_state.insumos.drop(columns=[nome])
+                if aplic in ("Produtos", "Ambos"):
+                    if nome in st.session_state.produtos.columns:
+                        st.session_state.produtos = st.session_state.produtos.drop(columns=[nome])
+                st.success(f"Campo '{nome}' removido de {aplic}!")
+                st.rerun()
+        if acao_campo == "Editar":
+            with st.form(f"form_edit_campo_{idx}"):
+                novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]))
+                nova_aplic = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], index=["Insumos","Produtos","Ambos"].index(campo_atual["Aplicação"]))
+                novo_tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], index=["Texto","Número","Seleção"].index(campo_atual["Tipo"]))
+                novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "")
+                salvar = st.form_submit_button("Salvar Alterações")
+                if salvar:
+                    nome_antigo = campo_atual["Campo"]
+                    aplic_antiga = campo_atual["Aplicação"]
+                    st.session_state.campos.loc[st.session_state.campos.index[idx], ["Campo","Aplicação","Tipo","Opções"]] = [
+                        novo_nome, nova_aplic, novo_tipo, novas_opcoes
+                    ]
+                    renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
+                    if renomeou:
+                        if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
+                            st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
+                        if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
+                            st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
+                    if nova_aplic in ("Insumos", "Ambos"):
+                        if novo_nome not in st.session_state.insumos.columns:
+                            st.session_state.insumos[novo_nome] = ""
+                    if nova_aplic in ("Produtos", "Ambos"):
+                        if novo_nome not in st.session_state.produtos.columns:
+                            st.session_state.produtos[novo_nome] = ""
+                    st.success("Campo atualizado!")
                     st.rerun()
-            if acao_campo == "Editar":
-                with st.form(f"form_edit_campo_{idx}"):
-                    novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]))
-                    nova_aplic = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], index=["Insumos","Produtos","Ambos"].index(campo_atual["Aplicação"]))
-                    novo_tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], index=["Texto","Número","Seleção"].index(campo_atual["Tipo"]))
-                    novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "")
-                    salvar = st.form_submit_button("Salvar Alterações")
-                    if salvar:
-                        nome_antigo = campo_atual["Campo"]
-                        aplic_antiga = campo_atual["Aplicação"]
-                        st.session_state.campos.loc[st.session_state.campos.index[idx], ["Campo","Aplicação","Tipo","Opções"]] = [
-                            novo_nome, nova_aplic, novo_tipo, novas_opcoes
-                        ]
-                        renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
-                        if renomeou:
-                            if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
-                                st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
-                            if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
-                                st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
-                        if nova_aplic in ("Insumos", "Ambos"):
-                            if novo_nome not in st.session_state.insumos.columns:
-                                st.session_state.insumos[novo_nome] = ""
-                        if nova_aplic in ("Produtos", "Ambos"):
-                            if novo_nome not in st.session_state.produtos.columns:
-                                st.session_state.produtos[novo_nome] = ""
-                        st.success("Campo atualizado!")
-                        st.rerun()
 
-    def baixar_csv(df, nome_arquivo):
+def baixar_csv(df, nome_arquivo):
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Baixar CSV",
@@ -1224,6 +1224,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
