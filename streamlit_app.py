@@ -31,16 +31,14 @@ import streamlit as st
 import pandas as pd
 from telegram import Bot
 from io import BytesIO
-from fpdf import FPDF  # Biblioteca para gerar PDF, instale com: pip install fpdf
-
+from fpdf import FPDF
 
 # --- Configurações Telegram ---
 TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 GRUPO_ID = -1003030758192
-TOPICO_ID = 28  # Thread no grupo
+TOPICO_ID = 28  # Thread no grupo (use só se precisar)
 
-
-# --- Função para gerar PDF com detalhes dos produtos ---
+# --- Função para gerar PDF ---
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf = FPDF()
     pdf.add_page()
@@ -62,13 +60,11 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
             pdf.cell(0, 8, f"Preço no Cartão: R$ {row['Preço no Cartão']:.2f}", 0, 1)
             pdf.ln(5)
 
-    pdf_str = pdf.output(dest='S').encode('latin1')  # Gera o PDF como string e codifica
+    pdf_str = pdf.output(dest='S').encode('latin1')
     pdf_bytesio = BytesIO(pdf_str)
-    pdf_bytesio.seek(0)
     return pdf_bytesio
 
-
-# --- Função para enviar PDF via Telegram ---
+# --- Função para enviar PDF ---
 def enviar_pdf_telegram(pdf_bytesio):
     bot = Bot(token=TOKEN)
     try:
@@ -77,11 +73,33 @@ def enviar_pdf_telegram(pdf_bytesio):
             document=pdf_bytesio,
             filename="precificacao_produto.pdf",
             caption="📄 Aqui está o PDF com a precificação."
-            # message_thread_id=TOPICO_ID  # comente para testar
+            # message_thread_id=TOPICO_ID  # Teste com e sem esse parâmetro
         )
         st.success("✅ PDF enviado para o Telegram com sucesso!")
     except Exception as e:
         st.error(f"Erro ao enviar PDF: {e}")
+
+# --- Streamlit ---
+st.title("📊 Precificador de Produtos")
+
+if "df_produtos_geral" not in st.session_state:
+    st.session_state.df_produtos_geral = pd.DataFrame([
+        {"Produto": "Caneta", "Qtd": 10, "Custo Unitário": 1.5, "Custos Extras Produto": 0.2,
+         "Margem (%)": 30, "Preço à Vista": 2.3, "Preço no Cartão": 2.5},
+        {"Produto": "Caderno", "Qtd": 5, "Custo Unitário": 4.0, "Custos Extras Produto": 0.5,
+         "Margem (%)": 25, "Preço à Vista": 5.7, "Preço no Cartão": 6.0},
+    ])
+
+st.subheader("Produtos cadastrados")
+st.dataframe(st.session_state.df_produtos_geral)
+
+if st.button("📤 Gerar PDF e enviar para Telegram"):
+    if st.session_state.df_produtos_geral.empty:
+        st.warning("⚠️ Nenhum produto para gerar PDF.")
+    else:
+        pdf_gerado = gerar_pdf(st.session_state.df_produtos_geral)
+        enviar_pdf_telegram(pdf_gerado)
+
 
 
 
@@ -1120,6 +1138,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
