@@ -912,7 +912,20 @@ def gerar_pdf_produto(dados_produto):
     return buffer
 
 
-# Exemplo de inicialização do Streamlit com abas (importante para evitar NameError)
+
+
+# Defina sua constante PRODUTOS_BASE_COLS e outras funções usadas como garantir_colunas_extras, render_input_por_tipo, etc.
+
+# Exemplo (substitua com suas definições reais)
+PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
+
+def garantir_colunas_extras(df: pd.DataFrame, categoria: str) -> pd.DataFrame:
+    # Exemplo simplificado - substitua pela sua lógica real
+    for col in PRODUTOS_BASE_COLS:
+        if col not in df.columns:
+            df[col] = None
+    return df
+
 def main():
     # Inicializa session_state se não existir
     if "produtos" not in st.session_state:
@@ -920,6 +933,8 @@ def main():
     if "insumos" not in st.session_state:
         st.session_state.insumos = pd.DataFrame(columns=["Nome", "Preço Unitário (R$)", "Unidade"])
 
+    # Definição das abas dentro da main()
+    aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
 
     with aba_produtos:
         st.header("Produtos")
@@ -927,14 +942,13 @@ def main():
         st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
         st.write("Aqui você pode adicionar a implementação da aba produtos...")
-   def main():
-        aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
 
         # Exemplo básico para mostrar os produtos
         st.dataframe(st.session_state.produtos)
 
 if __name__ == "__main__":
     main()
+
 
 import ast
 import io
@@ -1195,6 +1209,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
