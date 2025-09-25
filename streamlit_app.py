@@ -1229,13 +1229,13 @@ with aba_produtos:
         
 
         def baixar_csv(df, nome_arquivo):
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Baixar CSV",
-        data=csv,
-        file_name=nome_arquivo,
-        mime='text/csv',
-    )
+csv = df.to_csv(index=False).encode('utf-8')   # ❌ falta indentação
+st.download_button(
+    label="📥 Baixar CSV",
+    data=csv,
+    file_name=nome_arquivo,
+    mime='text/csv',
+)
 
 
          
@@ -1250,6 +1250,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
