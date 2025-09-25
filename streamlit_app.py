@@ -827,17 +827,14 @@ def baixar_csv(df, nome_arquivo):
         mime='text/csv',
     )
 
-# Função garantir_colunas_extras deve vir antes do seu uso
-def garantir_colunas_extras(df, tipo_aplicacao):
-    campos_aplicaveis = st.session_state.campos[
-        (st.session_state.campos["Aplicação"] == tipo_aplicacao) |
-        (st.session_state.campos["Aplicação"] == "Ambos")
+# Função para retornar os campos extras para uma aplicação específica
+def col_defs_para(aplicacao):
+    if "campos" not in st.session_state or st.session_state.campos.empty:
+        return pd.DataFrame()  # Retorna DataFrame vazio se não houver campos definidos
+    campos_filtrados = st.session_state.campos[
+        (st.session_state.campos["Aplicação"] == aplicacao) | (st.session_state.campos["Aplicação"] == "Ambos")
     ]
-    for campo in campos_aplicaveis["Campo"]:
-        if campo not in df.columns:
-            df[campo] = ""
-    return df
-
+    return campos_filtrados.reset_index(drop=True)
 
 # =====================================
 # Aba Insumos
@@ -956,6 +953,7 @@ with aba_insumos:
     baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
     if st.button("📤 Salvar INSUMOS no GitHub"):
         salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
+
 
 
 
@@ -1225,6 +1223,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
