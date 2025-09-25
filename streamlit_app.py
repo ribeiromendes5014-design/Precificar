@@ -50,13 +50,6 @@ def enviar_pdf_telegram(caminho_pdf):
 # ===============================
 # Funções auxiliares
 # ===============================
-def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
-    # ... seu código aqui ...
-
-
-
-
-
 
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
     """Exibe os resultados de precificação com tabela e imagens dos produtos."""
@@ -1087,6 +1080,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
