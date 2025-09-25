@@ -69,16 +69,16 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
 
 
 # --- Função para enviar PDF via Telegram ---
-def enviar_pdf_telegram(bot_token, chat_id, pdf_bytesio, topic_id=None):
-    bot = Bot(token=bot_token)
-    # Para enviar o PDF, usamos send_document com o arquivo em bytes
-    bot.send_document(
-        chat_id=chat_id,
-        document=pdf_bytesio,
-        filename="precificacao_produto.pdf",
-        caption="📄 Aqui está o PDF com a precificação.",
-        message_thread_id=topic_id,
-    )
+def enviar_pdf_telegram(caminho_pdf):
+    bot = Bot(token=TOKEN)
+    with open(caminho_pdf, "rb") as arquivo:
+        bot.send_document(
+            chat_id=GRUPO_ID,
+            document=arquivo,
+            caption="📄 Aqui está o PDF com a precificação."
+            # Removi message_thread_id para teste
+        )
+    st.success("PDF enviado para o Telegram com sucesso!")
 
 
 # --- Parte Streamlit ---
@@ -1142,6 +1142,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
