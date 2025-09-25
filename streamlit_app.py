@@ -1265,10 +1265,10 @@ pagina = st.sidebar.radio(
 # Roteamento das páginas
 # =====================================
 if pagina == "Precificação":
-    # exibir_precificacao()  # substitua com sua função de precificação
-    st.write("📊 Precificação aqui...")
+    precificacao_completa() # AGORA, CHAMA A FUNÇÃO COMPLETA
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
