@@ -698,247 +698,253 @@ def papelaria_aba():
 
     
     # ---------------------
-    # Criação das abas
-    # ---------------------
-    aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
-    
-    # =====================================
-    # Aba Campos (gerencia colunas extras)
-    # =====================================
-    with aba_campos:
-        st.header("Campos / Colunas Personalizadas")
+# Criação das abas
+# ---------------------
+aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
 
-        with st.form("form_add_campo"):
-            st.subheader("Adicionar novo campo")
-            nome_campo = st.text_input("Nome do Campo (será o nome da coluna)")
-            aplicacao = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"])
-            tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"])
-            opcoes = st.text_input("Opções (se 'Seleção', separe por vírgula)")
-            adicionar = st.form_submit_button("Adicionar Campo")
+# =====================================
+# Aba Campos (gerencia colunas extras)
+# =====================================
+with aba_campos:
+    st.header("Campos / Colunas Personalizadas")
 
-            if adicionar:
-                if not nome_campo.strip():
-                    st.warning("Informe um nome de campo válido.")
+    with st.form("form_add_campo"):
+        st.subheader("Adicionar novo campo")
+        nome_campo = st.text_input("Nome do Campo (será o nome da coluna)")
+        aplicacao = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"])
+        tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"])
+        opcoes = st.text_input("Opções (se 'Seleção', separe por vírgula)")
+        adicionar = st.form_submit_button("Adicionar Campo")
+
+        if adicionar:
+            if not nome_campo.strip():
+                st.warning("Informe um nome de campo válido.")
+            else:
+                ja_existe = (
+                    (st.session_state.campos["Campo"].astype(str).str.lower() == nome_campo.strip().lower())
+                    & (st.session_state.campos["Aplicação"] == aplicacao)
+                ).any()
+                if ja_existe:
+                    st.warning("Já existe um campo com esse nome para essa aplicação.")
                 else:
-                    ja_existe = (
-                        (st.session_state.campos["Campo"].astype(str).str.lower() == nome_campo.strip().lower())
-                        & (st.session_state.campos["Aplicação"] == aplicacao)
-                    ).any()
-                    if ja_existe:
-                        st.warning("Já existe um campo com esse nome para essa aplicação.")
-                    else:
-                        nova_linha = {
-                            "Campo": nome_campo.strip(),
-                            "Aplicação": aplicacao,
-                            "Tipo": tipo,
-                            "Opções": opcoes
-                        }
-                        st.session_state.campos = pd.concat(
-                            [st.session_state.campos, pd.DataFrame([nova_linha])],
-                            ignore_index=True
-                        )
-                        st.success(f"Campo '{nome_campo}' adicionado para {aplicacao}!")
-                        if aplicacao in ("Insumos", "Ambos"):
-                            if nome_campo not in st.session_state.insumos.columns:
-                                st.session_state.insumos[nome_campo] = ""
-                        if aplicacao in ("Produtos", "Ambos"):
-                            if nome_campo not in st.session_state.produtos.columns:
-                                st.session_state.produtos[nome_campo] = ""
-                        st.rerun()
-
-        st.markdown("### Campos cadastrados")
-        if st.session_state.campos.empty:
-            st.info("Nenhum campo extra cadastrado ainda.")
-        else:
-            st.dataframe(st.session_state.campos, use_container_width=True)
-
-        if not st.session_state.campos.empty:
-            st.divider()
-            st.subheader("Editar ou Excluir campo")
-            rotulos = [
-                f"{row.Campo}  ·  ({row.Aplicação})"
-                for _, row in st.session_state.campos.iterrows()
-            ]
-            escolha = st.selectbox("Escolha um campo", [""] + rotulos)
-            if escolha:
-                idx = rotulos.index(escolha)
-                campo_atual = st.session_state.campos.iloc[idx]
-                acao_campo = st.radio(
-                    "Ação",
-                    ["Nenhuma", "Editar", "Excluir"],
-                    horizontal=True,
-                    key=f"acao_campo_{idx}"
-                )
-                if acao_campo == "Excluir":
-                    if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
-                        nome = campo_atual["Campo"]
-                        aplic = campo_atual["Aplicação"]
-                        st.session_state.campos = st.session_state.campos.drop(st.session_state.campos.index[idx]).reset_index(drop=True)
-                        if aplic in ("Insumos", "Ambos"):
-                            if nome in st.session_state.insumos.columns:
-                                st.session_state.insumos = st.session_state.insumos.drop(columns=[nome])
-                        if aplic in ("Produtos", "Ambos"):
-                            if nome in st.session_state.produtos.columns:
-                                st.session_state.produtos = st.session_state.produtos.drop(columns=[nome])
-                        st.success(f"Campo '{nome}' removido de {aplic}!")
-                        st.rerun()
-                if acao_campo == "Editar":
-                    with st.form(f"form_edit_campo_{idx}"):
-                        novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]))
-                        nova_aplic = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], index=["Insumos","Produtos","Ambos"].index(campo_atual["Aplicação"]))
-                        novo_tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], index=["Texto","Número","Seleção"].index(campo_atual["Tipo"]))
-                        novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "")
-                        salvar = st.form_submit_button("Salvar Alterações")
-                        if salvar:
-                            nome_antigo = campo_atual["Campo"]
-                            aplic_antiga = campo_atual["Aplicação"]
-                            st.session_state.campos.loc[st.session_state.campos.index[idx], ["Campo","Aplicação","Tipo","Opções"]] = [
-                                novo_nome, nova_aplic, novo_tipo, novas_opcoes
-                            ]
-                            renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
-                            if renomeou:
-                                if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
-                                    st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
-                                if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
-                                    st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
-                            if nova_aplic in ("Insumos", "Ambos"):
-                                if novo_nome not in st.session_state.insumos.columns:
-                                    st.session_state.insumos[novo_nome] = ""
-                            if nova_aplic in ("Produtos", "Ambos"):
-                                if novo_nome not in st.session_state.produtos.columns:
-                                    st.session_state.produtos[novo_nome] = ""
-                            st.success("Campo atualizado!")
-                            st.rerun()
-
-        st.divider()
-        baixar_csv(st.session_state.campos, "campos_papelaria.csv")
-        if st.button("📤 Salvar CAMPO no GitHub"):
-            salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "categorias_papelaria.csv", st.session_state.campos, GITHUB_BRANCH)
-
-    # =====================================
-    # Aba Insumos
-    # =====================================
-    with aba_insumos:
-        st.header("Insumos")
-
-        st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
-
-        with st.form("form_add_insumo"):
-            st.subheader("Adicionar novo insumo")
-            nome_insumo = st.text_input("Nome do Insumo")
-            categoria_insumo = st.text_input("Categoria")
-            unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)")
-            preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f")
-
-            extras_insumos = col_defs_para("Insumos")
-            valores_extras = {}
-            if not extras_insumos.empty:
-                st.markdown("**Campos extras**")
-                for i, row in extras_insumos.reset_index(drop=True).iterrows():
-                    key = f"novo_insumo_extra_{row['Campo']}"
-                    valores_extras[row["Campo"]] = render_input_por_tipo(
-                        label=row["Campo"],
-                        tipo=row["Tipo"],
-                        opcoes=row["Opções"],
-                        valor_padrao=None,
-                        key=key
-                    )
-
-            adicionou = st.form_submit_button("Adicionar Insumo")
-            if adicionou:
-                if not nome_insumo.strip():
-                    st.warning("Informe o Nome do Insumo.")
-                else:
-                    novo = {
-                        "Nome": nome_insumo.strip(),
-                        "Categoria": categoria_insumo.strip(),
-                        "Unidade": unidade_insumo.strip(),
-                        "Preço Unitário (R$)": float(preco_insumo),
+                    nova_linha = {
+                        "Campo": nome_campo.strip(),
+                        "Aplicação": aplicacao,
+                        "Tipo": tipo,
+                        "Opções": opcoes
                     }
-                    for k, v in valores_extras.items():
-                        novo[k] = v
-                    todas_cols = list(dict.fromkeys(INSUMOS_BASE_COLS + extras_insumos["Campo"].tolist()))
-                    st.session_state.insumos = st.session_state.insumos.reindex(columns=list(set(st.session_state.insumos.columns) | set(todas_cols)))
-                    st.session_state.insumos = pd.concat([st.session_state.insumos, pd.DataFrame([novo])], ignore_index=True)
-                    st.success(f"Insumo '{nome_insumo}' adicionado!")
+                    st.session_state.campos = pd.concat(
+                        [st.session_state.campos, pd.DataFrame([nova_linha])],
+                        ignore_index=True
+                    )
+                    st.success(f"Campo '{nome_campo}' adicionado para {aplicacao}!")
+                    if aplicacao in ("Insumos", "Ambos"):
+                        if nome_campo not in st.session_state.insumos.columns:
+                            st.session_state.insumos[nome_campo] = ""
+                    if aplicacao in ("Produtos", "Ambos"):
+                        if nome_campo not in st.session_state.produtos.columns:
+                            st.session_state.produtos[nome_campo] = ""
                     st.rerun()
 
-        st.markdown("### Insumos cadastrados")
-        ordem_cols = INSUMOS_BASE_COLS + [c for c in st.session_state.insumos.columns if c not in INSUMOS_BASE_COLS]
-        st.dataframe(st.session_state.insumos.reindex(columns=ordem_cols), use_container_width=True)
+    st.markdown("### Campos cadastrados")
+    if st.session_state.campos.empty:
+        st.info("Nenhum campo extra cadastrado ainda.")
+    else:
+        st.dataframe(st.session_state.campos, use_container_width=True)
 
-        if not st.session_state.insumos.empty:
-            insumo_selecionado = st.selectbox(
-                "Selecione um insumo",
-                [""] + st.session_state.insumos["Nome"].astype(str).fillna("").tolist()
-            )
-        else:
-            insumo_selecionado = None
-
-        if insumo_selecionado:
-            acao_insumo = st.radio(
-                f"Ação para '{insumo_selecionado}'",
+    if not st.session_state.campos.empty:
+        st.divider()
+        st.subheader("Editar ou Excluir campo")
+        rotulos = [
+            f"{row.Campo}  ·  ({row.Aplicação})"
+            for _, row in st.session_state.campos.iterrows()
+        ]
+        escolha = st.selectbox("Escolha um campo", [""] + rotulos)
+        if escolha:
+            idx = rotulos.index(escolha)
+            campo_atual = st.session_state.campos.iloc[idx]
+            acao_campo = st.radio(
+                "Ação",
                 ["Nenhuma", "Editar", "Excluir"],
                 horizontal=True,
-                key=f"acao_insumo_{insumo_selecionado}"
+                key=f"acao_campo_{idx}"
             )
-
-            idxs = st.session_state.insumos.index[st.session_state.insumos["Nome"] == insumo_selecionado].tolist()
-            idx = idxs[0] if idxs else None
-
-            if acao_insumo == "Excluir" and idx is not None:
-                if st.button("Confirmar Exclusão", key=f"excluir_insumo_{idx}"):
-                    st.session_state.insumos = st.session_state.insumos.drop(index=idx).reset_index(drop=True)
-                    st.success(f"Insumo '{insumo_selecionado}' removido!")
+            if acao_campo == "Excluir":
+                if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
+                    nome = campo_atual["Campo"]
+                    aplic = campo_atual["Aplicação"]
+                    st.session_state.campos = st.session_state.campos.drop(st.session_state.campos.index[idx]).reset_index(drop=True)
+                    if aplic in ("Insumos", "Ambos"):
+                        if nome in st.session_state.insumos.columns:
+                            st.session_state.insumos = st.session_state.insumos.drop(columns=[nome])
+                    if aplic in ("Produtos", "Ambos"):
+                        if nome in st.session_state.produtos.columns:
+                            st.session_state.produtos = st.session_state.produtos.drop(columns=[nome])
+                    st.success(f"Campo '{nome}' removido de {aplic}!")
                     st.rerun()
-
-            if acao_insumo == "Editar" and idx is not None:
-                atual = st.session_state.insumos.loc[idx]
-                with st.form(f"form_edit_insumo_{idx}"):
-                    novo_nome = st.text_input("Nome do Insumo", value=str(atual.get("Nome","")))
-                    nova_categoria = st.text_input("Categoria", value=str(atual.get("Categoria","")))
-                    nova_unidade = st.text_input("Unidade de Medida (ex: un, kg, m)", value=str(atual.get("Unidade","")))
-                    novo_preco = st.number_input(
-                        "Preço Unitário (R$)", min_value=0.0, format="%.2f",
-                        value=float(atual.get("Preço Unitário (R$)", 0.0))
-                    )
-
-                    valores_extras_edit = {}
-                    extras_insumos = col_defs_para("Insumos")
-                    if not extras_insumos.empty:
-                        st.markdown("**Campos extras**")
-                        for i, row in extras_insumos.reset_index(drop=True).iterrows():
-                            campo = row["Campo"]
-                            key = f"edit_insumo_extra_{idx}_{campo}"
-                            valores_extras_edit[campo] = render_input_por_tipo(
-                                label=campo,
-                                tipo=row["Tipo"],
-                                opcoes=row["Opções"],
-                                valor_padrao=atual.get(campo, ""),
-                                key=key
-                            )
-
-                    salvou = st.form_submit_button("Salvar Alterações", key=f"salvar_insumo_{idx}")
-                    if salvou:
-                        st.session_state.insumos.loc[idx, "Nome"] = novo_nome
-                        st.session_state.insumos.loc[idx, "Categoria"] = nova_categoria
-                        st.session_state.insumos.loc[idx, "Unidade"] = nova_unidade
-                        st.session_state.insumos.loc[idx, "Preço Unitário (R$)"] = float(novo_preco)
-                        for k, v in valores_extras_edit.items():
-                            st.session_state.insumos.loc[idx, k] = v
-                        st.success("Insumo atualizado!")
+            if acao_campo == "Editar":
+                with st.form(f"form_edit_campo_{idx}"):
+                    novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]))
+                    nova_aplic = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], index=["Insumos","Produtos","Ambos"].index(campo_atual["Aplicação"]))
+                    novo_tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], index=["Texto","Número","Seleção"].index(campo_atual["Tipo"]))
+                    novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "")
+                    salvar = st.form_submit_button("Salvar Alterações")
+                    if salvar:
+                        nome_antigo = campo_atual["Campo"]
+                        aplic_antiga = campo_atual["Aplicação"]
+                        st.session_state.campos.loc[st.session_state.campos.index[idx], ["Campo","Aplicação","Tipo","Opções"]] = [
+                            novo_nome, nova_aplic, novo_tipo, novas_opcoes
+                        ]
+                        renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
+                        if renomeou:
+                            if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
+                                st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
+                            if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
+                                st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
+                        if nova_aplic in ("Insumos", "Ambos"):
+                            if novo_nome not in st.session_state.insumos.columns:
+                                st.session_state.insumos[novo_nome] = ""
+                        if nova_aplic in ("Produtos", "Ambos"):
+                            if novo_nome not in st.session_state.produtos.columns:
+                                st.session_state.produtos[novo_nome] = ""
+                        st.success("Campo atualizado!")
                         st.rerun()
 
-        baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
-        if st.button("📤 Salvar INSUMOS no GitHub"):
-            salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
+    st.divider()
+    baixar_csv(st.session_state.campos, "campos_papelaria.csv")
+    if st.button("📤 Salvar CAMPO no GitHub"):
+        salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "campos_papelaria.csv", st.session_state.campos, GITHUB_BRANCH)
+
+# =====================================
+# Aba Insumos
+# =====================================
+with aba_insumos:
+    st.header("Insumos")
+
+    st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
+
+    with st.form("form_add_insumo"):
+        st.subheader("Adicionar novo insumo")
+        nome_insumo = st.text_input("Nome do Insumo")
+        categoria_insumo = st.text_input("Categoria")
+        unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)")
+        preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f")
+
+        extras_insumos = col_defs_para("Insumos")
+        valores_extras = {}
+        if not extras_insumos.empty:
+            st.markdown("**Campos extras**")
+            for i, row in extras_insumos.reset_index(drop=True).iterrows():
+                key = f"novo_insumo_extra_{row['Campo']}"
+                valores_extras[row["Campo"]] = render_input_por_tipo(
+                    label=row["Campo"],
+                    tipo=row["Tipo"],
+                    opcoes=row["Opções"],
+                    valor_padrao=None,
+                    key=key
+                )
+
+        adicionou = st.form_submit_button("Adicionar Insumo")
+        if adicionou:
+            if not nome_insumo.strip():
+                st.warning("Informe o Nome do Insumo.")
+            else:
+                novo = {
+                    "Nome": nome_insumo.strip(),
+                    "Categoria": categoria_insumo.strip(),
+                    "Unidade": unidade_insumo.strip(),
+                    "Preço Unitário (R$)": float(preco_insumo),
+                }
+                for k, v in valores_extras.items():
+                    novo[k] = v
+                todas_cols = list(dict.fromkeys(INSUMOS_BASE_COLS + extras_insumos["Campo"].tolist()))
+                st.session_state.insumos = st.session_state.insumos.reindex(columns=list(set(st.session_state.insumos.columns) | set(todas_cols)))
+                st.session_state.insumos = pd.concat([st.session_state.insumos, pd.DataFrame([novo])], ignore_index=True)
+                st.success(f"Insumo '{nome_insumo}' adicionado!")
+                st.rerun()
+
+    st.markdown("### Insumos cadastrados")
+    ordem_cols = INSUMOS_BASE_COLS + [c for c in st.session_state.insumos.columns if c not in INSUMOS_BASE_COLS]
+    st.dataframe(st.session_state.insumos.reindex(columns=ordem_cols), use_container_width=True)
+
+    if not st.session_state.insumos.empty:
+        insumo_selecionado = st.selectbox(
+            "Selecione um insumo",
+            [""] + st.session_state.insumos["Nome"].astype(str).fillna("").tolist()
+        )
+    else:
+        insumo_selecionado = None
+
+    if insumo_selecionado:
+        acao_insumo = st.radio(
+            f"Ação para '{insumo_selecionado}'",
+            ["Nenhuma", "Editar", "Excluir"],
+            horizontal=True,
+            key=f"acao_insumo_{insumo_selecionado}"
+        )
+
+        idxs = st.session_state.insumos.index[st.session_state.insumos["Nome"] == insumo_selecionado].tolist()
+        idx = idxs[0] if idxs else None
+
+        if acao_insumo == "Excluir" and idx is not None:
+            if st.button("Confirmar Exclusão", key=f"excluir_insumo_{idx}"):
+                st.session_state.insumos = st.session_state.insumos.drop(index=idx).reset_index(drop=True)
+                st.success(f"Insumo '{insumo_selecionado}' removido!")
+                st.rerun()
+
+        if acao_insumo == "Editar" and idx is not None:
+            atual = st.session_state.insumos.loc[idx]
+            with st.form(f"form_edit_insumo_{idx}"):
+                novo_nome = st.text_input("Nome do Insumo", value=str(atual.get("Nome","")))
+                nova_categoria = st.text_input("Categoria", value=str(atual.get("Categoria","")))
+                nova_unidade = st.text_input("Unidade de Medida (ex: un, kg, m)", value=str(atual.get("Unidade","")))
+                novo_preco = st.number_input(
+                    "Preço Unitário (R$)", min_value=0.0, format="%.2f",
+                    value=float(atual.get("Preço Unitário (R$)", 0.0))
+                )
+
+                valores_extras_edit = {}
+                extras_insumos = col_defs_para("Insumos")
+                if not extras_insumos.empty:
+                    st.markdown("**Campos extras**")
+                    for i, row in extras_insumos.reset_index(drop=True).iterrows():
+                        campo = row["Campo"]
+                        key = f"edit_insumo_extra_{idx}_{campo}"
+                        valores_extras_edit[campo] = render_input_por_tipo(
+                            label=campo,
+                            tipo=row["Tipo"],
+                            opcoes=row["Opções"],
+                            valor_padrao=atual.get(campo, ""),
+                            key=key
+                        )
+
+                salvou = st.form_submit_button("Salvar Alterações", key=f"salvar_insumo_{idx}")
+                if salvou:
+                    st.session_state.insumos.loc[idx, "Nome"] = novo_nome
+                    st.session_state.insumos.loc[idx, "Categoria"] = nova_categoria
+                    st.session_state.insumos.loc[idx, "Unidade"] = nova_unidade
+                    st.session_state.insumos.loc[idx, "Preço Unitário (R$)"] = float(novo_preco)
+                    for k, v in valores_extras_edit.items():
+                        st.session_state.insumos.loc[idx, k] = v
+                    st.success("Insumo atualizado!")
+                    st.rerun()
+
+    baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
+    if st.button("📤 Salvar INSUMOS no GitHub"):
+        salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
 
 
-# Supondo que a função garantir_colunas_extras esteja definida assim:
-def garantir_colunas_extras(df, nome_coluna):
-    if nome_coluna not in df.columns:
-        df[nome_coluna] = None
+# Função corrigida: garantir colunas extras com base em campos definidos
+def garantir_colunas_extras(df, tipo_aplicacao):
+    campos_aplicaveis = st.session_state.campos[
+        (st.session_state.campos["Aplicação"] == tipo_aplicacao) |
+        (st.session_state.campos["Aplicação"] == "Ambos")
+    ]
+    for campo in campos_aplicaveis["Campo"]:
+        if campo not in df.columns:
+            df[campo] = ""
     return df
+
 
 # =====================================
 # Aba Produtos
@@ -1206,6 +1212,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
