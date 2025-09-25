@@ -844,9 +844,7 @@ def col_defs_para(tipo_aplicacao):
         (st.session_state.campos["Aplicação"] == "Ambos")
     ].reset_index(drop=True)
 
-with aba_insumos:
-    st.header("Insumos")
-    st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
+
 
 
   
@@ -1271,6 +1269,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
