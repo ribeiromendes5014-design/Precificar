@@ -916,22 +916,23 @@ def gerar_pdf_produto(dados_produto):
 
 
 
+
 PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
 
 def garantir_colunas_extras(df: pd.DataFrame, categoria: str) -> pd.DataFrame:
-    # Exemplo básico, substitua pela sua lógica
     for col in PRODUTOS_BASE_COLS:
         if col not in df.columns:
             df[col] = None
     return df
 
 def main():
+    # Inicialização do session_state
     if "produtos" not in st.session_state:
         st.session_state.produtos = pd.DataFrame(columns=PRODUTOS_BASE_COLS)
     if "insumos" not in st.session_state:
         st.session_state.insumos = pd.DataFrame(columns=["Nome", "Preço Unitário (R$)", "Unidade"])
 
-    # Define as abas APENAS aqui:
+    # Criação única das abas
     aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
 
     with aba_home:
@@ -950,6 +951,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
@@ -1212,6 +1214,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
