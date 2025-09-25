@@ -62,10 +62,10 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
             pdf.cell(0, 8, f"Preço no Cartão: R$ {row['Preço no Cartão']:.2f}", 0, 1)
             pdf.ln(5)
 
-    pdf_output = BytesIO()
-    pdf.output(pdf_output)
-    pdf_output.seek(0)
-    return pdf_output
+    pdf_str = pdf.output(dest='S').encode('latin1')  # Gera o PDF como string e codifica
+    pdf_bytesio = BytesIO(pdf_str)
+    return pdf_bytesio
+
 
 
 # --- Função para enviar PDF via Telegram ---
@@ -1142,6 +1142,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
