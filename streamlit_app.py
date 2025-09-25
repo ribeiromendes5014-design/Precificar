@@ -68,6 +68,9 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
     st.dataframe(df, use_container_width=True)
 
 
+import pandas as pd
+import streamlit as st
+
 def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
                         modo_margem: str, margem_fixa: float) -> pd.DataFrame:
     if df.empty:
@@ -75,44 +78,61 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
 
     df = df.copy()
     rateio_unitario = 0
+
+    # Calcular rateio por unidade com base no frete + custos extras
     if frete_total > 0 or custos_extras > 0:
         qtd_total = df["Qtd"].sum()
         if qtd_total > 0:
             rateio_unitario = (frete_total + custos_extras) / qtd_total
 
+    # Garantir que a coluna "Custos Extras Produto" exista e esteja limpa
     if "Custos Extras Produto" not in df.columns:
         df["Custos Extras Produto"] = 0.0
     else:
-        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0)
+        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0.0)
 
+    # Adicionar o rateio ao custo extra por produto
     df["Custos Extras Produto"] += rateio_unitario
 
+    # Garantir que a coluna "Custo Unitário" exista e esteja limpa
     if "Custo Unitário" not in df.columns:
         df["Custo Unitário"] = 0.0
     else:
-        df["Custo Unitário"] = df["Custo Unitário"].fillna(0)
+        df["Custo Unitário"] = df["Custo Unitário"].fillna(0.0)
 
+    # Calcular o custo total por unidade
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
-    if modo_margem == "Margem fixa":
+    # Processar margens conforme o modo selecionado
+    if "Margem (%)" not in df.columns:
         df["Margem (%)"] = margem_fixa
-    elif modo_margem == "Margem por produto":
-        # Usar a margem do produto, preenchendo NaNs com o valor fixo (exemplo: 30%)
-        if "Margem (%)" not in df.columns:
-            df["Margem (%)"] = margem_fixa
-        else:
-            df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
     else:
-        # Segurança para outros casos, também preencher com fixo
-        if "Margem (%)" not in df.columns:
-            df["Margem (%)"] = margem_fixa
-        else:
-            df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
+        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
 
+    if modo_margem == "Margem fixa":
+        # Apenas sobrescreve onde ainda for NaN (já tratado acima)
+        pass  # Nada mais a fazer, pois já aplicamos fillna acima
+    elif modo_margem == "Margem por produto":
+        # Já foi tratado acima com fillna, então respeita os valores existentes
+        pass
+    else:
+        # Modo desconhecido: ainda assim, usamos a margem fixa como fallback (também já tratado)
+        pass
+
+    # Calcular os preços finais
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
 
     return df
+
+def load_csv_github(url: str) -> pd.DataFrame:
+    try:
+        df = pd.read_csv(url)
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar CSV do GitHub: {e}")
+        return pd.DataFrame()
+
 
 
 def load_csv_github(url: str) -> pd.DataFrame:
@@ -1034,6 +1054,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
