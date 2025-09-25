@@ -948,19 +948,7 @@ def garantir_colunas_extras(df, nome_coluna):
 # =====================================
 aba_produtos = st.expander("Produtos")  # Definindo o expander
 
-with aba_produtos:  # Usando o expander
-    st.header("Produtos")
 
-    # Garantindo que a coluna "Produtos" exista em st.session_state.produtos
-    if 'produtos' not in st.session_state:
-        st.session_state.produtos = pd.DataFrame()  # Inicializando o DataFrame, caso não exista
-    
-    # Garantindo que a chave 'insumos' exista em st.session_state
-    if 'insumos' not in st.session_state:
-        st.session_state.insumos = pd.DataFrame()  # Inicializando 'insumos' como um DataFrame vazio, caso não exista
-    
-    # Garantindo que a coluna "Produtos" exista no DataFrame de produtos
-    st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
     
     with st.form("form_add_produto"):
         st.subheader("Adicionar novo produto")
@@ -1221,6 +1209,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
