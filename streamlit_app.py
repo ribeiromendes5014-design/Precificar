@@ -857,6 +857,12 @@ with aba_insumos:
 
 
 # =====================================
+# Definições globais de colunas base
+# =====================================
+INSUMOS_BASE_COLS = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
+PRODUTOS_BASE_COLS = ["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"]
+
+# =====================================
 # Aba Insumos
 # =====================================
 with aba_insumos:
@@ -973,6 +979,7 @@ with aba_insumos:
     baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
     if st.button("📤 Salvar INSUMOS no GitHub"):
         salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
+
 
 
 
@@ -1243,6 +1250,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
