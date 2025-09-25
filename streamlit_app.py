@@ -1257,19 +1257,18 @@ def baixar_csv(df, nome_arquivo):
 # =====================================
 # Menu lateral de navegação
 # =====================================
-pagina = st.sidebar.radio( # << Manter APENAS esta definição
+pagina = st.sidebar.radio(
     "Escolha a página:",
-    ["Precificação", "Papelaria"]  # pode adicionar mais opções depois
+    ["Precificação", "Papelaria"]  # Certifique-se de que só há esta chamada no arquivo
 )
 
 # =====================================
 # Roteamento das páginas
 # =====================================
 if pagina == "Precificação":
-    # Certifique-se de que a função precificacao_completa() foi definida
-    precificacao_completa() 
+    precificacao_completa() # Chama a função que você criou no Passo 1
 elif pagina == "Papelaria":
-    papelaria_aba()
+    papelaria_aba()         # Chama a função que já existia
 
 
 
