@@ -845,7 +845,15 @@ with aba_insumos:
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
 
-  
+  if st.button("📤 Salvar PRODUTOS no GitHub"):
+    salvar_csv_no_github(
+        GITHUB_TOKEN,
+        GITHUB_REPO,
+        "produtos_papelaria.csv",
+        st.session_state.produtos,
+        GITHUB_BRANCH
+    )
+
 
 
 # =====================================
@@ -968,20 +976,7 @@ with aba_insumos:
                     st.success("Insumo atualizado!")
                     st.rerun()
 
-    baixar_csv(st.session_state.insumos, "insumos_papelaria.csv")
-    if st.button("📤 Salvar INSUMOS no GitHub"):
-        salvar_csv_no_github(GITHUB_TOKEN, GITHUB_REPO, "insumos_papelaria.csv", st.session_state.insumos, GITHUB_BRANCH)
-
-
-     if st.button("📤 Salvar PRODUTOS no GitHub"):
-    salvar_csv_no_github(
-        GITHUB_TOKEN,
-        GITHUB_REPO,
-        "produtos_papelaria.csv",
-        st.session_state.produtos,
-        GITHUB_BRANCH
-    )
-
+    
 
 
 # =====================================
@@ -1252,6 +1247,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
