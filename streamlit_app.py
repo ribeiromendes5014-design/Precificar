@@ -936,6 +936,7 @@ def papelaria_aba():
 # Aba Produtos
 # =====================================
 with aba_produtos:
+
     st.header("Produtos")
 
     st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
@@ -1198,6 +1199,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
