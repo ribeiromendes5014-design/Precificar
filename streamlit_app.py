@@ -175,7 +175,8 @@ def baixar_csv_aba(df, nome_arquivo):
         f"⬇️ Baixar {nome_arquivo}",
         data=csv,
         file_name=nome_arquivo,
-        mime="text/csv"
+        mime="text/csv",
+        key=f"download_button_{nome_arquivo.replace('.', '_')}" # Adiciona chave exclusiva
     )
 
 def _opcoes_para_lista(opcoes_str):
@@ -1062,3 +1063,4 @@ if pagina == "Precificação":
     precificacao_completa()
 elif pagina == "Papelaria":
     papelaria_aba()
+
