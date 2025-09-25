@@ -25,7 +25,7 @@ import requests # Importação repetida, mantida apenas uma vez no topo
 # Configurações Telegram (Mantidas fora da função para uso global ou secrets)
 TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 TELEGRAM_CHAT_ID = "-1003030758192"
-TOPICO_ID = 28  # ID do tópico (thread) no grupo Telegram
+TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
@@ -1252,6 +1252,7 @@ if pagina == "Precificação":
     precificacao_completa() # Chama a função que você criou no Passo 1
 elif pagina == "Papelaria":
     papelaria_aba()         # Chama a função que já existia
+
 
 
 
