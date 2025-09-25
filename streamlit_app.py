@@ -840,12 +840,20 @@ def garantir_colunas_extras(df, tipo_aplicacao):
             df[campo] = ""
     return df
 
-# Depois seu código normal
+def col_defs_para(tipo_aplicacao):
+    if "campos" not in st.session_state or st.session_state.campos.empty:
+        return pd.DataFrame(columns=["Campo", "Aplicação", "Tipo", "Opções"])
+    return st.session_state.campos[
+        (st.session_state.campos["Aplicação"] == tipo_aplicacao) |
+        (st.session_state.campos["Aplicação"] == "Ambos")
+    ].reset_index(drop=True)
+
 with aba_insumos:
     st.header("Insumos")
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
-    # resto do código...
+
+  
 
 
 # =====================================
@@ -1235,6 +1243,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
