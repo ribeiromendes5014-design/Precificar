@@ -64,21 +64,24 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
 
     pdf_str = pdf.output(dest='S').encode('latin1')  # Gera o PDF como string e codifica
     pdf_bytesio = BytesIO(pdf_str)
+    pdf_bytesio.seek(0)
     return pdf_bytesio
 
 
-
 # --- Função para enviar PDF via Telegram ---
-def enviar_pdf_telegram(caminho_pdf):
+def enviar_pdf_telegram(pdf_bytesio):
     bot = Bot(token=TOKEN)
-    with open(caminho_pdf, "rb") as arquivo:
+    try:
         bot.send_document(
             chat_id=GRUPO_ID,
-            document=arquivo,
-            caption="📄 Aqui está o PDF com a precificação."
-            # Removi message_thread_id para teste
+            document=pdf_bytesio,
+            filename="precificacao_produto.pdf",
+            caption="📄 Aqui está o PDF com a precificação.",
+            message_thread_id=TOPICO_ID
         )
-    st.success("PDF enviado para o Telegram com sucesso!")
+        st.success("✅ PDF enviado para o Telegram com sucesso!")
+    except Exception as e:
+        st.error(f"Erro ao enviar PDF: {e}")
 
 
 # --- Parte Streamlit ---
@@ -101,11 +104,8 @@ if st.button("📤 Gerar PDF e enviar para Telegram"):
         st.warning("⚠️ Nenhum produto para gerar PDF.")
     else:
         pdf_gerado = gerar_pdf(st.session_state.df_produtos_geral)
-        try:
-            enviar_pdf_telegram(TOKEN, GRUPO_ID, pdf_gerado, TOPICO_ID)
-            st.success("✅ PDF enviado para o Telegram com sucesso!")
-        except Exception as e:
-            st.error(f"Erro ao enviar PDF: {e}")
+        enviar_pdf_telegram(pdf_gerado)
+
 
 
 
@@ -1142,6 +1142,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
