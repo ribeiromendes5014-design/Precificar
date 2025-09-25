@@ -827,14 +827,26 @@ def baixar_csv(df, nome_arquivo):
         mime='text/csv',
     )
 
-# Função para retornar os campos extras para uma aplicação específica
-def col_defs_para(aplicacao):
+# Função para garantir que as colunas extras estejam no dataframe
+def garantir_colunas_extras(df, tipo_aplicacao):
     if "campos" not in st.session_state or st.session_state.campos.empty:
-        return pd.DataFrame()  # Retorna DataFrame vazio se não houver campos definidos
-    campos_filtrados = st.session_state.campos[
-        (st.session_state.campos["Aplicação"] == aplicacao) | (st.session_state.campos["Aplicação"] == "Ambos")
+        return df
+    campos_aplicaveis = st.session_state.campos[
+        (st.session_state.campos["Aplicação"] == tipo_aplicacao) |
+        (st.session_state.campos["Aplicação"] == "Ambos")
     ]
-    return campos_filtrados.reset_index(drop=True)
+    for campo in campos_aplicaveis["Campo"]:
+        if campo not in df.columns:
+            df[campo] = ""
+    return df
+
+# Depois seu código normal
+with aba_insumos:
+    st.header("Insumos")
+    st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
+
+    # resto do código...
+
 
 # =====================================
 # Aba Insumos
@@ -1223,6 +1235,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
