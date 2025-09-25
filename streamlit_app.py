@@ -29,12 +29,17 @@ def exibir_papelaria():
 
 import streamlit as st
 from telegram import Bot
-import pandas as pd
 
 # Token e IDs fixos do Telegram
 TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 GRUPO_ID = -1003030758192
 TOPICO_ID = 28
+
+def gerar_pdf(caminho_pdf):
+    # Sua lógica para gerar o PDF e salvar em caminho_pdf
+    # Exemplo simples, você pode usar reportlab, fpdf, matplotlib, etc.
+    with open(caminho_pdf, "wb") as f:
+        f.write(b"%PDF-1.4\n%PDF gerado de exemplo\n")  # só um placeholder
 
 def enviar_pdf_telegram(caminho_pdf):
     bot = Bot(token=TOKEN)
@@ -46,6 +51,12 @@ def enviar_pdf_telegram(caminho_pdf):
             caption="📄 Aqui está o PDF com a precificação."
         )
     st.success("PDF enviado para o Telegram com sucesso!")
+
+if st.button("Gerar PDF e enviar Telegram"):
+    caminho_pdf = "precificacao_produto.pdf"
+    gerar_pdf(caminho_pdf)
+    enviar_pdf_telegram(caminho_pdf)
+
 
 # ===============================
 # Funções auxiliares
@@ -1080,6 +1091,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
