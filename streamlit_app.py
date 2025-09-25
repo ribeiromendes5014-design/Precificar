@@ -818,14 +818,6 @@ if not st.session_state.campos.empty:
                     st.success("Campo atualizado!")
                     st.rerun()
 
-def baixar_csv(df, nome_arquivo):
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label=f"📥 Baixar {nome_arquivo}",
-        data=csv,
-        file_name=nome_arquivo,
-        mime='text/csv',
-    )
 
 # Função para garantir que as colunas extras estejam no dataframe
 def garantir_colunas_extras(df, tipo_aplicacao):
@@ -854,6 +846,14 @@ with aba_insumos:
 
 
   
+def baixar_csv(df, nome_arquivo):
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label=f"📥 Baixar {nome_arquivo}",
+        data=csv,
+        file_name=nome_arquivo,
+        mime='text/csv',
+    )
 
 
 # =====================================
@@ -1250,6 +1250,7 @@ if pagina == "Precificação":
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
 
 
 
