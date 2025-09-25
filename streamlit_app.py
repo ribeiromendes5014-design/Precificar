@@ -927,6 +927,8 @@ def main():
         st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
 
         st.write("Aqui você pode adicionar a implementação da aba produtos...")
+   def main():
+        aba_home, aba_relatorios, aba_produtos = st.tabs(["Home", "Relatórios", "Produtos"])
 
         # Exemplo básico para mostrar os produtos
         st.dataframe(st.session_state.produtos)
@@ -1193,6 +1195,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
