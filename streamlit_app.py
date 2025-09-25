@@ -1189,15 +1189,12 @@ with aba_produtos:
 
 
 
-# Sidebar para seleção da aba
-pagina = st.sidebar.radio("Selecione uma opção:", ["Precificação", "Papelaria"])
-
-
 if pagina == "Precificação":
-# exibir_precificacao() # substitua com sua função de precificação
-st.write("📊 Precificação aqui...")
+    # exibir_precificacao()  # substitua com sua função de precificação
+    st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
-papelaria_aba()
+    papelaria_aba()
+
 
 
 
