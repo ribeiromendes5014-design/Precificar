@@ -33,9 +33,10 @@ import requests
 from fpdf import FPDF
 from io import BytesIO
 
+# Configurações Telegram
 TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 TELEGRAM_CHAT_ID = "-1003030758192"
-TOPICO_ID = 28
+TOPICO_ID = 28  # ID do tópico (thread) no grupo Telegram
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf = FPDF()
@@ -44,6 +45,7 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf.cell(0, 10, "Relatório de Precificação", 0, 1, "C")
     pdf.ln(10)
     pdf.set_font("Arial", "", 12)
+
     if df.empty:
         pdf.cell(0, 10, "Nenhum produto cadastrado.", 0, 1)
     else:
@@ -55,6 +57,7 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
             pdf.cell(0, 8, f"Preço à Vista: R$ {row['Preço à Vista']:.2f}", 0, 1)
             pdf.cell(0, 8, f"Preço no Cartão: R$ {row['Preço no Cartão']:.2f}", 0, 1)
             pdf.ln(5)
+
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     return BytesIO(pdf_bytes)
 
@@ -64,6 +67,7 @@ def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
     data = {"chat_id": TELEGRAM_CHAT_ID}
     if thread_id is not None:
         data["message_thread_id"] = thread_id
+
     response = requests.post(url, data=data, files=files)
     resp_json = response.json()
     st.write("DEBUG TELEGRAM PDF:", resp_json)
@@ -72,7 +76,8 @@ def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
     else:
         st.success("✅ PDF enviado para o Telegram com sucesso!")
 
-# Streamlit app
+# --- Streamlit app ---
+
 st.title("📊 Precificador de Produtos")
 
 if "df_produtos_geral" not in st.session_state:
@@ -90,6 +95,7 @@ if st.button("📤 Gerar PDF e enviar para Telegram"):
     else:
         pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
         enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
+
 
 
 
@@ -1130,6 +1136,7 @@ if pagina == "Precificação":
 elif pagina == "Papelaria":
     # exibir_papelaria()   # <-- esta é a antiga
     papelaria_aba()         # <-- chame a versão completa
+
 
 
 
