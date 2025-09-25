@@ -1255,11 +1255,24 @@ def baixar_csv(df, nome_arquivo):
 
 
 
+# =====================================
+# Menu lateral de navegação
+# =====================================
+pagina = st.sidebar.radio(
+    "Escolha a página:",
+    ["Precificação", "Papelaria"]  # pode adicionar mais opções depois
+)
+
+# =====================================
+# Roteamento das páginas
+# =====================================
 if pagina == "Precificação":
     # exibir_precificacao()  # substitua com sua função de precificação
     st.write("📊 Precificação aqui...")
 elif pagina == "Papelaria":
     papelaria_aba()
+
+
 
 
 
