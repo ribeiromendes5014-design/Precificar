@@ -13,7 +13,7 @@ import ast
 # ===============================
 
 # Configurações Telegram
-TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
+TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9RfwN" # Token fictício para manter a segurança, assumindo que st.secrets será usado no ambiente real
 TELEGRAM_CHAT_ID = "-1003030758192"
 TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
@@ -527,7 +527,8 @@ def papelaria_aba():
     # === 2. INICIALIZAÇÃO E ABAS DE GERENCIAMENTO DE ITENS ===
     
     # Variáveis de Configuração
-    GITHUB_TOKEN = st.secrets["github_token"]
+    # Assumindo que o token está nas secrets do ambiente Streamlit. Se não estiver, use st.session_state.get() ou defina um valor padrão seguro.
+    GITHUB_TOKEN = st.secrets.get("github_token", "TOKEN_FICTICIO")
     GITHUB_REPO = "ribeiromendes5014-design/Precificar"
     GITHUB_BRANCH = "main"
     URL_BASE = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/"
@@ -536,14 +537,17 @@ def papelaria_aba():
     CAMPOS_CSV_URL = URL_BASE + "categorias_papelaria.csv"
 
     # Estado da sessão
+    # CORREÇÃO: Alterado 'carregar_csv_github' para 'load_csv_github'
     if "insumos" not in st.session_state:
-        st.session_state.insumos = carregar_csv_github(INSUMOS_CSV_URL)
+        st.session_state.insumos = load_csv_github(INSUMOS_CSV_URL)
 
+    # CORREÇÃO: Alterado 'carregar_csv_github' para 'load_csv_github'
     if "produtos" not in st.session_state:
-        st.session_state.produtos = carregar_csv_github(PRODUTOS_CSV_URL)
+        st.session_state.produtos = load_csv_github(PRODUTOS_CSV_URL)
 
+    # CORREÇÃO: Alterado 'carregar_csv_github' para 'load_csv_github' e removido o segundo argumento
     if "campos" not in st.session_state:
-        st.session_state.campos = carregar_csv_github(CAMPOS_CSV_URL, COLUNAS_CAMPOS)
+        st.session_state.campos = load_csv_github(CAMPOS_CSV_URL) # COLUNAS_CAMPOS não é necessário na função
         
     # Inicializações de estado
     if "campos" not in st.session_state:
@@ -902,7 +906,7 @@ def papelaria_aba():
 
                     # 🔔 Envio da mensagem para o Telegram
                     try:
-                        TELEGRAM_TOKEN_SECRET = st.secrets.get("telegram_token", "TOKEN_NAO_ENCONTRADO") # Usando st.secrets para o token do Telegram
+                        TELEGRAM_TOKEN_SECRET = st.secrets.get("telegram_token", TELEGRAM_TOKEN) # Usando st.secrets para o token do Telegram
                         TELEGRAM_CHAT_ID_PROD = "-1003030758192"
                         THREAD_ID_PROD = 43
 
