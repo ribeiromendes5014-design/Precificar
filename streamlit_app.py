@@ -78,23 +78,104 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     return BytesIO(pdf_bytes)
 
 
-def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
-    """Envia o arquivo PDF para o Telegram."""
-    # Lê o token de forma segura do Streamlit Secrets, usando o hardcoded como fallback.
+def enviar_pdf_telegram(pdf_bytesio, df_produtos: pd.DataFrame, thread_id=None):
+    """Envia o arquivo PDF e a primeira imagem (se existir) para o Telegram."""
+    
+    # Lê o token de forma segura do Streamlit Secrets
     token = st.secrets.get("telegram_token", HARDCODED_TELEGRAM_TOKEN)
     
-    url = f"https://api.telegram.org/bot{token}/sendDocument"
-    files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
-    data = {"chat_id": TELEGRAM_CHAT_ID}
-    if thread_id is not None:
-        data["message_thread_id"] = thread_id
+    # 1. Tenta encontrar a URL da primeira imagem para enviar como foto
+    image_url = None
+    image_caption = "Relatório de Precificação"
+    
+    if not df_produtos.empty and "Imagem_URL" in df_produtos.columns:
+        # Encontra a primeira URL válida no DataFrame
+        first_row = df_produtos.iloc[0]
+        url = first_row.get("Imagem_URL")
+        produto = first_row.get("Produto", "Produto")
+        
+        if isinstance(url, str) and url.startswith("http"):
+            image_url = url
+            image_caption = f"Relatório de Precificação (Produto Principal: {produto})"
 
-    response = requests.post(url, data=data, files=files)
-    resp_json = response.json()
-    if not resp_json.get("ok"):
-        st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
+    # 2. Prepara o envio do PDF
+    
+    # Primeiro, envia a foto (se existir)
+    if image_url:
+        try:
+            # Tenta baixar a imagem
+            img_response = requests.get(image_url, timeout=10)
+            img_response.raise_for_status()
+            
+            # 3. Envia a imagem como um "document" ou "photo" primeiro
+            # Usaremos sendPhoto, pois a foto será a mensagem principal
+            url_photo = f"https://api.telegram.org/bot{token}/sendPhoto"
+            
+            # Cria a mensagem (caption) para o PDF, com um link de download para o PDF
+            # Primeiro precisamos enviar o PDF como um documento, para obter o file_id
+            
+            url_doc = f"https://api.telegram.org/bot{token}/sendDocument"
+            files_doc = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+            data_doc = {"chat_id": TELEGRAM_CHAT_ID, "caption": image_caption}
+            if thread_id is not None:
+                data_doc["message_thread_id"] = thread_id
+            
+            # Envia o PDF como documento
+            resp_doc = requests.post(url_doc, data=data_doc, files=files_doc)
+            resp_doc_json = resp_doc.json()
+            
+            if not resp_doc_json.get("ok"):
+                 st.error(f"Erro ao enviar PDF: {resp_doc_json.get('description')}")
+                 return
+
+            # Se o PDF foi enviado com sucesso, agora enviamos a foto com a caption
+            
+            files_photo = {'photo': ('foto.jpg', img_response.content, img_response.headers.get('Content-Type', 'image/jpeg'))}
+            data_photo = {"chat_id": TELEGRAM_CHAT_ID, "caption": image_caption}
+            if thread_id is not None:
+                data_photo["message_thread_id"] = thread_id
+
+            # Envia a foto
+            resp_photo = requests.post(url_photo, data=data_photo, files=files_photo)
+            resp_photo_json = resp_photo.json()
+
+            if resp_photo_json.get("ok"):
+                st.success("✅ PDF e Foto enviados para o Telegram com sucesso!")
+            else:
+                 # Se a foto falhar, pelo menos o PDF já foi enviado
+                 st.warning(f"❌ Erro ao enviar a foto. PDF enviado com sucesso.")
+                 
+        except Exception as e:
+            st.warning(f"⚠️ Erro ao buscar/enviar a imagem. Enviando apenas o PDF. Erro: {e}")
+            
+            # Se a imagem falhar, faz o envio normal do PDF (fallback)
+            url = f"https://api.telegram.org/bot{token}/sendDocument"
+            files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+            data = {"chat_id": TELEGRAM_CHAT_ID}
+            if thread_id is not None:
+                data["message_thread_id"] = thread_id
+
+            response = requests.post(url, data=data, files=files)
+            resp_json = response.json()
+            if not resp_json.get("ok"):
+                st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
+            else:
+                st.success("✅ PDF enviado para o Telegram com sucesso!")
+    
     else:
-        st.success("✅ PDF enviado para o Telegram com sucesso!")
+        # Se não há URL de imagem, faz o envio normal do PDF
+        url = f"https://api.telegram.org/bot{token}/sendDocument"
+        files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+        data = {"chat_id": TELEGRAM_CHAT_ID}
+        if thread_id is not None:
+            data["message_thread_id"] = thread_id
+
+        response = requests.post(url, data=data, files=files)
+        resp_json = response.json()
+        if not resp_json.get("ok"):
+            st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
+        else:
+            st.success("✅ PDF enviado para o Telegram com sucesso!")
 
 
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
@@ -535,7 +616,8 @@ def precificacao_completa():
             st.warning("⚠️ Nenhum produto para gerar PDF.")
         else:
             pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
-            enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
+            # Passa o DataFrame completo para a função de envio
+            enviar_pdf_telegram(pdf_io, st.session_state.df_produtos_geral, thread_id=TOPICO_ID)
     
     st.markdown("---")
     
@@ -642,7 +724,7 @@ def precificacao_completa():
                 quantidade = st.number_input("📦 Quantidade", min_value=1, step=1, key="input_quantidade_manual")
                 valor_pago = st.number_input("💰 Valor Pago (Custo Unitário Base R$)", min_value=0.0, step=0.01, key="input_valor_pago_manual")
                 
-                # --- NOVO: Campo de URL da Imagem ---
+                # --- Campo de URL da Imagem ---
                 imagem_url = st.text_input("🔗 URL da Imagem (opcional)", key="input_imagem_url_manual")
                 # --- FIM NOVO ---
 
