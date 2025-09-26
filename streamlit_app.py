@@ -474,19 +474,44 @@ def precificacao_completa():
     if "rateio_global_unitario_atual" not in st.session_state:
         st.session_state["rateio_global_unitario_atual"] = 0.0
 
-    # Inicialização de df_produtos_geral com dados de exemplo (se necessário)
-    if "df_produtos_geral" not in st.session_state or st.session_state.df_produtos_geral.empty:
-        exemplo_data = [
-            {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
-            {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
-        ]
-        df_base = pd.DataFrame(exemplo_data)
-        df_base["Custos Extras Produto"] = 0.0
-        df_base["Imagem"] = None
-        df_base["Imagem_URL"] = ""
+    # === Lógica de Carregamento AUTOMÁTICO do CSV do GitHub (Correção de Persistência) ===
+    if "produtos_manuais_loaded" not in st.session_state:
+        df_loaded = load_csv_github(ARQ_CAIXAS)
+        
+        # Define as colunas de ENTRADA (apenas dados brutos)
+        cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+        df_base_loaded = df_loaded[[col for col in cols_entrada if col in df_loaded.columns]].copy()
+        
+        # Garante que as colunas de ENTRADA existam, mesmo que vazias
+        if "Custos Extras Produto" not in df_base_loaded.columns: df_base_loaded["Custos Extras Produto"] = 0.0
+        if "Imagem" not in df_base_loaded.columns: df_base_loaded["Imagem"] = None
+        if "Imagem_URL" not in df_base_loaded.columns: df_base_loaded["Imagem_URL"] = ""
 
-        st.session_state.df_produtos_geral = processar_dataframe(df_base, 0.0, 0.0, "Margem fixa", 30.0)
-        st.session_state.produtos_manuais = df_base.copy()
+        if not df_base_loaded.empty:
+            st.session_state.produtos_manuais = df_base_loaded.copy()
+        else:
+            # Caso não consiga carregar do GitHub, usa dados de exemplo
+            st.warning("⚠️ Não foi possível carregar dados persistidos. Usando dados de exemplo.")
+            exemplo_data = [
+                {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
+                {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
+            ]
+            df_base = pd.DataFrame(exemplo_data)
+            df_base["Custos Extras Produto"] = 0.0
+            df_base["Imagem"] = None
+            df_base["Imagem_URL"] = ""
+            st.session_state.produtos_manuais = df_base.copy()
+            
+        # Garante que o df_produtos_geral é processado logo após carregar/definir o manual
+        st.session_state.df_produtos_geral = processar_dataframe(
+            st.session_state.produtos_manuais, 
+            st.session_state.get("frete_manual", 0.0), 
+            st.session_state.get("extras_manual", 0.0), 
+            st.session_state.get("modo_margem", "Margem fixa"), 
+            st.session_state.get("margem_fixa", 30.0)
+        )
+        st.session_state.produtos_manuais_loaded = True
+    # === FIM da Lógica de Carregamento Automático ===
 
 
     if "frete_manual" not in st.session_state:
@@ -503,7 +528,12 @@ def precificacao_completa():
     modo_margem = st.session_state.get("modo_margem", "Margem fixa")
     margem_fixa = st.session_state.get("margem_fixa", 30.0)
     
-    
+    # Recalcula o DF geral para garantir que ele reflita o rateio mais recente (caso frete/extras tenham mudado)
+    st.session_state.df_produtos_geral = processar_dataframe(
+        st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
+    )
+
+
     # ----------------------------------------------------
     # Lógica de Salvamento Automático
     # ----------------------------------------------------
@@ -656,25 +686,16 @@ def precificacao_completa():
             if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
                 df_exemplo = load_csv_github(ARQ_CAIXAS)
                 if not df_exemplo.empty:
-                    # O rateio global unitário e outros campos calculados são descartados no carregamento, 
-                    # pois serão recalculados abaixo. Apenas as colunas de ENTRADA importam.
-                    
+                    # Filtra colunas de ENTRADA
                     cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
-                    
-                    # Garante que só carrega colunas que existem no CSV e que são de ENTRADA
                     df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
                     
-                    # Adiciona colunas ausentes se necessário para o DF manual (Dados de ENTRADA)
-                    if "Custos Extras Produto" not in df_base_loaded.columns:
-                        df_base_loaded["Custos Extras Produto"] = 0.0
-                    if "Imagem" not in df_base_loaded.columns:
-                        df_base_loaded["Imagem"] = None
-                    if "Imagem_URL" not in df_base_loaded.columns:
-                        df_base_loaded["Imagem_URL"] = ""
+                    # Garante colunas ausentes
+                    if "Custos Extras Produto" not in df_base_loaded.columns: df_base_loaded["Custos Extras Produto"] = 0.0
+                    if "Imagem" not in df_base_loaded.columns: df_base_loaded["Imagem"] = None
+                    if "Imagem_URL" not in df_base_loaded.columns: df_base_loaded["Imagem_URL"] = ""
 
-                    st.session_state.produtos_manuais = df_base_loaded
-                    
-                    # Recalcula o DF geral a partir dos dados de entrada carregados
+                    st.session_state.produtos_manuais = df_base_loaded.copy()
                     st.session_state.df_produtos_geral = processar_dataframe(
                         st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
                     )
@@ -748,14 +769,14 @@ def precificacao_completa():
                 rateio_global_unitario = st.session_state.get("rateio_global_unitario_atual", 0.0)
                 st.info(f"O Rateio Global por unidade (R$ {formatar_brl(rateio_global_unitario, decimais=4, prefixo=False)}) será adicionado automaticamente ao custo total.")
                 
-                # CORREÇÃO DE LÓGICA: O valor inicial do custo extra deve ser 0.0, 
+                # O valor inicial do custo extra deve ser 0.0, 
                 # pois o rateio GLOBAL é adicionado automaticamente na função processar_dataframe.
-                # Se usarmos o rateio como padrão aqui, ele será adicionado DUAS VEZES.
+                # O usuário deve inserir aqui APENAS custos específicos que não fazem parte do rateio global.
                 custo_extra_produto = st.number_input(
                     "💰 Custos Extras ESPECÍFICOS do Produto (R$)", 
                     min_value=0.0, 
                     step=0.01, 
-                    value=0.0, # Corrigido para 0.0. O usuário insere apenas custos extras que não são o rateio.
+                    value=0.0, # Valor padrão 0.0, como o esperado.
                     key="input_custo_extra_manual"
                 )
                 
@@ -768,7 +789,6 @@ def precificacao_completa():
 
 
             # Custo total unitário AQUI PARA FINS DE PRÉ-CÁLCULO E PREVIEW
-            # Deve ser: Custo Base + Custo Específico + Rateio Global
             custo_total_unitario_com_rateio = valor_pago + custo_extra_produto + rateio_global_unitario
 
 
@@ -920,7 +940,7 @@ def precificacao_completa():
                 if "Imagem_URL" not in df_base_loaded.columns:
                     df_base_loaded["Imagem_URL"] = ""
 
-                st.session_state.produtos_manuais = df_base_loaded
+                st.session_state.produtos_manuais = df_base_loaded.copy()
                 
                 # Recalcula o DF geral a partir dos dados de entrada carregados
                 st.session_state.df_produtos_geral = processar_dataframe(
@@ -1407,7 +1427,7 @@ def papelaria_aba():
             )
 
             idxs_p = st.session_state.produtos.index[st.session_state.produtos["Produto"] == produto_selecionado].tolist()
-            idx_p = idxs_p[0] if idxs_p else None
+            idx_p = idxs[0] if idxs_p else None
 
             if acao_produto == "Excluir" and idx_p is not None:
                 if st.button("Confirmar Exclusão", key=f"excluir_produto_{idx_p}"):
