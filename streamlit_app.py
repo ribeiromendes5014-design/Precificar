@@ -109,15 +109,24 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
         with st.container():
             cols = st.columns([1, 3])
             with cols[0]:
-                # Tenta exibir imagem dos produtos manuais (se estiverem nos dicionário de bytes)
-                img_bytes = imagens_dict.get(row.get("Produto"))
-                if img_bytes:
-                    st.image(img_bytes, width=100)
-                elif row.get("Imagem") is not None and isinstance(row.get("Imagem"), bytes):
+                img_to_display = None
+                
+                # 1. Tenta carregar imagem do dicionário (upload manual)
+                img_to_display = imagens_dict.get(row.get("Produto"))
+
+                # 2. Tenta carregar imagem dos bytes (se persistido)
+                if img_to_display is None and row.get("Imagem") is not None and isinstance(row.get("Imagem"), bytes):
                     try:
-                        st.image(row.get("Imagem"), width=100)
+                        img_to_display = row.get("Imagem")
                     except Exception:
-                        st.write("🖼️ N/A")
+                        pass # Continua tentando a URL
+
+                # 3. Tenta carregar imagem da URL (se persistido)
+                img_url = row.get("Imagem_URL")
+                if img_to_display is None and img_url and isinstance(img_url, str) and img_url.startswith("http"):
+                    st.image(img_url, width=100, caption="URL")
+                elif img_to_display:
+                    st.image(img_to_display, width=100, caption="Arquivo")
                 else:
                     st.write("🖼️ N/A")
                     
@@ -224,7 +233,7 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     cols_to_keep = [
         "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
         "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
-        "Imagem"
+        "Imagem", "Imagem_URL" # Adicionada Imagem_URL para persistência no CSV
     ]
     
     # Mantém apenas as colunas que existem no DF
@@ -382,21 +391,26 @@ def precificacao_completa():
     # Inicialização de variáveis de estado da Precificação
     if "produtos_manuais" not in st.session_state:
         st.session_state.produtos_manuais = pd.DataFrame(columns=[
-            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
+            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem", "Imagem_URL"
         ])
     
+    # Garante a coluna Imagem_URL para produtos existentes que possam ter sido carregados
+    if "Imagem_URL" not in st.session_state.produtos_manuais.columns:
+        st.session_state.produtos_manuais["Imagem_URL"] = ""
+
     # Inicialização de df_produtos_geral com dados de exemplo (se necessário)
     if "df_produtos_geral" not in st.session_state or st.session_state.df_produtos_geral.empty:
         exemplo_data = [
             {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
             {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
         ]
-        st.session_state.df_produtos_geral = processar_dataframe(pd.DataFrame(exemplo_data), 0.0, 0.0, "Margem fixa", 30.0)
-        
-        # Inicializa o manual a partir do geral
-        st.session_state.produtos_manuais = pd.DataFrame(exemplo_data)
-        st.session_state.produtos_manuais["Custos Extras Produto"] = 0.0
-        st.session_state.produtos_manuais["Imagem"] = None
+        df_base = pd.DataFrame(exemplo_data)
+        df_base["Custos Extras Produto"] = 0.0
+        df_base["Imagem"] = None
+        df_base["Imagem_URL"] = ""
+
+        st.session_state.df_produtos_geral = processar_dataframe(df_base, 0.0, 0.0, "Margem fixa", 30.0)
+        st.session_state.produtos_manuais = df_base.copy()
 
 
     if "frete_manual" not in st.session_state:
@@ -548,6 +562,7 @@ def precificacao_completa():
                     df_pdf = pd.DataFrame(produtos_pdf)
                     df_pdf["Custos Extras Produto"] = 0.0
                     df_pdf["Imagem"] = None
+                    df_pdf["Imagem_URL"] = "" # Inicializa nova coluna
                     # Concatena os novos produtos ao manual
                     st.session_state.produtos_manuais = pd.concat([st.session_state.produtos_manuais, df_pdf], ignore_index=True)
                     st.session_state.df_produtos_geral = processar_dataframe(
@@ -563,6 +578,9 @@ def precificacao_completa():
                 if not df_exemplo.empty:
                     df_exemplo["Custos Extras Produto"] = 0.0
                     df_exemplo["Imagem"] = None
+                    if "Imagem_URL" not in df_exemplo.columns:
+                        df_exemplo["Imagem_URL"] = ""
+
                     st.session_state.produtos_manuais = df_exemplo.copy()
                     st.session_state.df_produtos_geral = processar_dataframe(
                         df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
@@ -623,7 +641,12 @@ def precificacao_completa():
                 produto = st.text_input("📝 Nome do Produto", key="input_produto_manual")
                 quantidade = st.number_input("📦 Quantidade", min_value=1, step=1, key="input_quantidade_manual")
                 valor_pago = st.number_input("💰 Valor Pago (Custo Unitário Base R$)", min_value=0.0, step=0.01, key="input_valor_pago_manual")
-                imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
+                
+                # --- NOVO: Campo de URL da Imagem ---
+                imagem_url = st.text_input("🔗 URL da Imagem (opcional)", key="input_imagem_url_manual")
+                # --- FIM NOVO ---
+
+                
             with col2:
                 valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
                 custo_extra_produto = st.number_input(
@@ -632,6 +655,10 @@ def precificacao_completa():
                 preco_final_sugerido = st.number_input(
                     "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01, key="input_preco_sugerido_manual"
                 )
+                
+                # Uploader de arquivo (mantido como alternativa)
+                imagem_file = st.file_uploader("🖼️ Foto do Produto (Upload - opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
+
 
             custo_total_unitario = valor_pago + custo_extra_produto
 
@@ -656,9 +683,19 @@ def precificacao_completa():
                 if adicionar_produto:
                     if produto and quantidade > 0 and valor_pago >= 0:
                         imagem_bytes = None
+                        url_salvar = ""
+
+                        # Prioriza o arquivo uploaded, se existir
                         if imagem_file is not None:
                             imagem_bytes = imagem_file.read()
-                            imagens_dict[produto] = imagem_bytes
+                            imagens_dict[produto] = imagem_bytes # Guarda para exibição na sessão
+                        
+                        # Se não houver upload, usa a URL
+                        elif imagem_url.strip():
+                            url_salvar = imagem_url.strip()
+
+                        # Se houver upload, a URL salva deve ser vazia, e vice-versa.
+                        # O CSV irá persistir a Imagem_URL.
 
                         novo_produto_data = {
                             "Produto": [produto],
@@ -666,7 +703,8 @@ def precificacao_completa():
                             "Custo Unitário": [valor_pago],
                             "Custos Extras Produto": [custo_extra_produto],
                             "Margem (%)": [margem_manual],
-                            "Imagem": [imagem_bytes]
+                            "Imagem": [imagem_bytes],
+                            "Imagem_URL": [url_salvar] # Salva a URL para persistência
                         }
                         novo_produto = pd.DataFrame(novo_produto_data)
 
@@ -748,6 +786,11 @@ def precificacao_completa():
             if not df_exemplo.empty:
                 df_exemplo["Custos Extras Produto"] = 0.0
                 df_exemplo["Imagem"] = None
+                
+                # Garante a nova coluna ao carregar
+                if "Imagem_URL" not in df_exemplo.columns:
+                    df_exemplo["Imagem_URL"] = ""
+
                 st.session_state.produtos_manuais = df_exemplo.copy()
                 st.session_state.df_produtos_geral = processar_dataframe(
                     df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
@@ -1318,7 +1361,7 @@ def papelaria_aba():
                         st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-                        st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
+                        st.session_state.produtos.loc[idx_p, "Margem (%)] = float(nova_margem)
                         st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
                         for k, v in valores_extras_edit_p.items():
                             st.session_state.produtos.loc[idx_p, k] = v
