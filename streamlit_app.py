@@ -233,6 +233,7 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 rateio_global_unitario = row.get('Rateio Global Unitário', 0.0) 
                 
                 # Exibe a soma dos custos extras específicos (se houver) e o rateio global por unidade
+                # NOTA: O Custos Extras Produto é o valor ESPECÍFICO do produto (digitado pelo usuário ou 0.0)
                 rateio_e_extras_display = custos_extras_prod + rateio_global_unitario
                 st.write(f"🛠 Rateio/Extras (Total/Un.): {formatar_brl(rateio_e_extras_display, decimais=4)}") # Exibição com mais decimais para rateio
                 
@@ -655,19 +656,25 @@ def precificacao_completa():
             if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
                 df_exemplo = load_csv_github(ARQ_CAIXAS)
                 if not df_exemplo.empty:
-                    # Filtra colunas que existem no df_exemplo para evitar erro, mas garantindo as de entrada
+                    # O rateio global unitário e outros campos calculados são descartados no carregamento, 
+                    # pois serão recalculados abaixo. Apenas as colunas de ENTRADA importam.
+                    
                     cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+                    
+                    # Garante que só carrega colunas que existem no CSV e que são de ENTRADA
                     df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
                     
-                    # Adiciona colunas ausentes se necessário para o DF manual
+                    # Adiciona colunas ausentes se necessário para o DF manual (Dados de ENTRADA)
                     if "Custos Extras Produto" not in df_base_loaded.columns:
                         df_base_loaded["Custos Extras Produto"] = 0.0
                     if "Imagem" not in df_base_loaded.columns:
                         df_base_loaded["Imagem"] = None
                     if "Imagem_URL" not in df_base_loaded.columns:
                         df_base_loaded["Imagem_URL"] = ""
-                    
+
                     st.session_state.produtos_manuais = df_base_loaded
+                    
+                    # Recalcula o DF geral a partir dos dados de entrada carregados
                     st.session_state.df_produtos_geral = processar_dataframe(
                         st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
                     )
@@ -694,7 +701,7 @@ def precificacao_completa():
 
 
             if qtd_total_manual > 0:
-                rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
+                rateio_calculado = (frete_total + custos_extras) / qtd_total_manual
             else:
                 rateio_calculado = 0.0
             
@@ -739,13 +746,17 @@ def precificacao_completa():
             with col2:
                 # Informa o rateio atual (fixo)
                 rateio_global_unitario = st.session_state.get("rateio_global_unitario_atual", 0.0)
-                st.info(f"O Rateio Global por unidade será adicionado automaticamente ao custo total: {formatar_brl(rateio_global_unitario, decimais=4)}")
+                st.info(f"O Rateio Global por unidade (R$ {formatar_brl(rateio_global_unitario, decimais=4, prefixo=False)}) será adicionado automaticamente ao custo total.")
                 
-                # O valor padrão é 0.0, pois o rateio global é adicionado na função processar_dataframe.
-                # O usuário deve inserir aqui apenas custos ESPECÍFICOS.
+                # O valor padrão é o rateio global, como solicitado.
+                # O usuário pode alterar para adicionar um custo extra específico ALÉM do rateio.
                 custo_extra_produto = st.number_input(
                     # A label foi corrigida para indicar que o usuário deve inserir apenas custos específicos.
-                    "💰 Custos Extras ESPECÍFICOS do Produto (R$)", min_value=0.0, step=0.01, value=0.0, key="input_custo_extra_manual"
+                    "💰 Custos Extras ESPECÍFICOS do Produto (R$)", 
+                    min_value=0.0, 
+                    step=0.01, 
+                    value=rateio_global_unitario, # Puxa o rateio como valor padrão inicial
+                    key="input_custo_extra_manual"
                 )
                 
                 preco_final_sugerido = st.number_input(
@@ -757,25 +768,47 @@ def precificacao_completa():
 
 
             # Custo total unitário AQUI inclui o rateio global ATUAL para fins de preview de preço
-            custo_total_unitario_pre_rateio = valor_pago + custo_extra_produto
-            custo_total_unitario_com_rateio = custo_total_unitario_pre_rateio + rateio_global_unitario
+            # O campo `custo_extra_produto` JÁ CONTÉM o rateio global unitário se não for alterado, 
+            # ou contém a soma do rateio + o valor que o usuário digitou, dependendo de como 
+            # o Streamlit atualizou o valor do input. 
+            # Para simplificar, vamos usar o valor do input `custo_extra_produto` e adicionar o `valor_pago`.
+            custo_total_unitario_com_rateio = valor_pago + custo_extra_produto # Usa o valor do input que já contém o rateio.
 
+
+            margem_manual = 30.0 # Valor padrão
 
             if preco_final_sugerido > 0:
-                margem_calculada = 0.0
-                if custo_total_unitario_com_rateio > 0:
-                    margem_calculada = (preco_final_sugerido / custo_total_unitario_com_rateio - 1) * 100
-                margem_manual = round(margem_calculada, 2)
-                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:,.2f}%")
                 preco_a_vista_calc = preco_final_sugerido
+                
+                if custo_total_unitario_com_rateio > 0:
+                    # Calcula a margem REQUERIDA para atingir o preço sugerido
+                    margem_calculada = (preco_a_vista_calc / custo_total_unitario_com_rateio - 1) * 100
+                else:
+                    margem_calculada = 0.0
+                    
+                margem_manual = round(margem_calculada, 2)
+                st.info(f"🧮 Margem necessária calculada: **{margem_manual:,.2f}%**")
             else:
+                # Se não há preço sugerido, usa a margem padrão (ou a digitada) para calcular o preço.
                 margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0, key="input_margem_manual")
                 preco_a_vista_calc = custo_total_unitario_com_rateio * (1 + margem_manual / 100)
-
+                
             preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
             st.markdown(f"**Preço à Vista Calculado:** {formatar_brl(preco_a_vista_calc)}")
             st.markdown(f"**Preço no Cartão Calculado:** {formatar_brl(preco_no_cartao_calc)}")
+            
+            # --- CORREÇÃO FINAL: Garante que apenas o CUSTO EXTRA ESPECÍFICO (sem o rateio) seja salvo no DF Manual ---
+            # Isso é crucial, pois o `processar_dataframe` adiciona o rateio GLOBAL (frete_total + extras_global) novamente.
+            # Se o usuário não alterou o custo_extra_produto (e ele está com o valor do rateio),
+            # o custo extra específico deve ser 0.0.
+            if custo_extra_produto == rateio_global_unitario:
+                custo_extra_produto_salvar = 0.0
+            else:
+                # Se o usuário alterou, subtrai o rateio global para obter apenas o custo ESPECÍFICO.
+                # NOTA: O rateio global será adicionado novamente na função processar_dataframe.
+                custo_extra_produto_salvar = custo_extra_produto - rateio_global_unitario
+            # --- FIM CORREÇÃO FINAL ---
 
             with st.form("form_submit_manual"):
                 adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
@@ -793,12 +826,12 @@ def precificacao_completa():
                         elif imagem_url.strip():
                             url_salvar = imagem_url.strip()
 
-                        # Salva na lista manual apenas os dados de ENTRADA do usuário
+                        # Salva na lista manual apenas os dados de ENTRADA do usuário (Custo Extra ESPECÍFICO)
                         novo_produto_data = {
                             "Produto": [produto],
                             "Qtd": [quantidade],
                             "Custo Unitário": [valor_pago],
-                            "Custos Extras Produto": [custo_extra_produto], # Apenas o custo específico
+                            "Custos Extras Produto": [custo_extra_produto_salvar], # Salva apenas o custo específico (sem o rateio)
                             "Margem (%)": [margem_manual],
                             "Imagem": [imagem_bytes],
                             "Imagem_URL": [url_salvar] # Salva a URL para persistência
