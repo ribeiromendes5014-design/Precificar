@@ -19,6 +19,43 @@ TELEGRAM_CHAT_ID = "-1003030758192"
 TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
+# --- NOVA FUNÇÃO: FORMATACAO BRL ---
+def formatar_brl(valor, decimais=2, prefixo=True):
+    """Formata um valor float para a string de moeda BRL (R$ X.XXX,XX/XXXX) de forma simplificada."""
+    try:
+        valor = float(valor)
+    except (ValueError, TypeError):
+        return "R$ 0,00" if prefixo else "0,00"
+
+    # 1. Formata para o número correto de decimais (usando ponto como separador decimal temporário)
+    s = f"{valor:.{decimais}f}"
+    
+    # 2. Divide em parte inteira e decimal
+    if '.' in s:
+        inteira, decimal = s.split('.')
+    else:
+        inteira = s
+        decimal = '0' * decimais
+
+    # 3. Formata a parte inteira para separador de milhar (ponto)
+    inteira_formatada = ''
+    for i, digito in enumerate(reversed(inteira)):
+        # Adiciona ponto a cada 3 dígitos (exceto no primeiro)
+        if i > 0 and i % 3 == 0 and digito.isdigit():
+            inteira_formatada += '.'
+        inteira_formatada += digito
+    
+    # Inverte a string e remove o prefixo de ponto extra (se houver)
+    inteira_formatada = inteira_formatada[::-1].lstrip('.')
+
+    # 4. Junta tudo com a vírgula como separador decimal
+    resultado = f"{inteira_formatada},{decimal}"
+    if prefixo:
+        return f"R$ {resultado}"
+    return resultado
+# --- FIM NOVA FUNÇÃO ---
+
+
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     """Gera um PDF formatado a partir do DataFrame de precificação, incluindo a URL da imagem."""
     pdf = FPDF()
@@ -66,13 +103,13 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
             if "Custo Unitário" in pdf_cols:
                 # Usa o Custo Total Unitário para o relatório, se disponível
                 custo_unit_val = row.get("Custo Total Unitário", row.get("Custo Unitário", 0.0))
-                pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {custo_unit_val:.2f}", border=1, align="R")
+                pdf.cell(col_widths["Custo Unitário"], 10, formatar_brl(custo_unit_val), border=1, align="R")
             if "Margem (%)" in pdf_cols:
                 pdf.cell(col_widths["Margem (%)"], 10, f"{row.get('Margem (%)', 0.0):.2f}%", border=1, align="R")
             if "Preço à Vista" in pdf_cols:
-                pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row.get('Preço à Vista', 0.0):.2f}", border=1, align="R")
+                pdf.cell(col_widths["Preço à Vista"], 10, formatar_brl(row.get('Preço à Vista', 0.0)), border=1, align="R")
             if "Preço no Cartão" in pdf_cols:
-                pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row.get('Preço no Cartão', 0.0):.2f}", border=1, align="R")
+                pdf.cell(col_widths["Preço no Cartão"], 10, formatar_brl(row.get('Preço no Cartão', 0.0)), border=1, align="R")
             
             # --- NOVO: URL da Imagem no PDF ---
             if "URL da Imagem" in pdf_cols:
@@ -189,7 +226,7 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 custo_base = row.get('Custo Unitário', 0.0)
                 custo_total_unitario = row.get('Custo Total Unitário', custo_base)
 
-                st.write(f"💰 Custo Base: R$ {custo_base:.2f}")
+                st.write(f"💰 Custo Base: {formatar_brl(custo_base)}")
 
                 custos_extras_prod = row.get('Custos Extras Produto', 0.0)
                 # Puxa o rateio global unitário calculado na função processar_dataframe
@@ -197,10 +234,10 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 
                 # Exibe a soma dos custos extras específicos (se houver) e o rateio global por unidade
                 rateio_e_extras_display = custos_extras_prod + rateio_global_unitario
-                st.write(f"🛠 Rateio/Extras (Total/Un.): R$ {rateio_e_extras_display:.2f}") # Exibição corrigida
+                st.write(f"🛠 Rateio/Extras (Total/Un.): {formatar_brl(rateio_e_extras_display)}") # Exibição corrigida
                 
                 if 'Custo Total Unitário' in df.columns:
-                    st.write(f"💸 Custo Total/Un: **R$ {custo_total_unitario:.2f}**")
+                    st.write(f"💸 Custo Total/Un: **{formatar_brl(custo_total_unitario)}**")
 
                 if "Margem (%)" in df.columns:
                     margem_val = row.get("Margem (%)", 0)
@@ -211,9 +248,9 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                     st.write(f"📈 Margem: **{margem_float:.2f}%**")
                 
                 if "Preço à Vista" in df.columns:
-                    st.write(f"💰 Preço à Vista: **R$ {row.get('Preço à Vista', 0):.2f}**")
+                    st.write(f"💰 Preço à Vista: **{formatar_brl(row.get('Preço à Vista', 0))}**")
                 if "Preço no Cartão" in df.columns:
-                    st.write(f"💳 Preço no Cartão: **R$ {row.get('Preço no Cartão', 0):.2f}**")
+                    st.write(f"💳 Preço no Cartão: **{formatar_brl(row.get('Preço no Cartão', 0))}**")
 
 
 def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
@@ -243,7 +280,6 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     if qtd_total > 0:
         rateio_unitario = (frete_total + custos_extras) / qtd_total
 
-    # --- CORREÇÃO: Removido bloco 'pass' ambíguo e aplicado o rateio corretamente ---
     # A coluna 'Custos Extras Produto' agora será tratada como custos específicos do produto.
     # O rateio global será adicionado no cálculo do Custo Total Unitário abaixo.
 
@@ -469,26 +505,29 @@ def precificacao_completa():
     # Lógica de Salvamento Automático
     # ----------------------------------------------------
     
-    # Prepara o DataFrame para salvar: remove a coluna 'Imagem' que contém bytes
-    df_to_hash = st.session_state.produtos_manuais.drop(columns=["Imagem"], errors='ignore')
-
-    # 1. Inicializa o hash para o estado da precificação
+    # --- NOVO: Usa df_produtos_geral para salvar, garantindo colunas de precificação ---
+    
+    # 1. Cria uma cópia do DF geral e remove colunas não-CSV-serializáveis (Imagem)
+    df_to_save = st.session_state.df_produtos_geral.drop(columns=["Imagem"], errors='ignore')
+    
+    # 2. Inicializa o hash para o estado da precificação
     if "hash_precificacao" not in st.session_state:
-        st.session_state.hash_precificacao = hash_df(df_to_hash)
+        st.session_state.hash_precificacao = hash_df(df_to_save)
 
-    # 2. Verifica se houve alteração nos produtos manuais para salvar automaticamente
-    novo_hash = hash_df(df_to_hash)
+    # 3. Verifica se houve alteração nos produtos (agora baseado no DF completo)
+    novo_hash = hash_df(df_to_save)
     if novo_hash != st.session_state.hash_precificacao:
         if novo_hash != "error": # Evita salvar se a função hash falhou
             salvar_csv_no_github(
                 GITHUB_TOKEN,
                 GITHUB_REPO,
                 PATH_PRECFICACAO,
-                df_to_hash, # Salva o df sem a coluna 'Imagem'
+                df_to_save, # Salva o df completo com custos e preços
                 GITHUB_BRANCH,
                 mensagem="♻️ Alteração automática na precificação"
             )
             st.session_state.hash_precificacao = novo_hash
+    # --- FIM NOVO ---
 
 
     # ----------------------------------------------------
@@ -614,14 +653,24 @@ def precificacao_completa():
             if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
                 df_exemplo = load_csv_github(ARQ_CAIXAS)
                 if not df_exemplo.empty:
-                    df_exemplo["Custos Extras Produto"] = 0.0
-                    df_exemplo["Imagem"] = None
-                    if "Imagem_URL" not in df_exemplo.columns:
-                        df_exemplo["Imagem_URL"] = ""
-
-                    st.session_state.produtos_manuais = df_exemplo.copy()
+                    # Garantir que as colunas calculadas existam para que o processar_dataframe não se perca.
+                    # As colunas calculadas serão recriadas pela função processar_dataframe
+                    
+                    # Filtra colunas que existem no df_exemplo para evitar erro, mas garantindo as de entrada
+                    cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+                    df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
+                    
+                    # Adiciona colunas ausentes se necessário para o DF manual
+                    if "Custos Extras Produto" not in df_base_loaded.columns:
+                        df_base_loaded["Custos Extras Produto"] = 0.0
+                    if "Imagem" not in df_base_loaded.columns:
+                        df_base_loaded["Imagem"] = None
+                    if "Imagem_URL" not in df_base_loaded.columns:
+                        df_base_loaded["Imagem_URL"] = ""
+                    
+                    st.session_state.produtos_manuais = df_base_loaded
                     st.session_state.df_produtos_geral = processar_dataframe(
-                        df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
+                        st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
                     )
                     exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
                     st.rerun()
@@ -646,12 +695,12 @@ def precificacao_completa():
 
 
             if qtd_total_manual > 0:
-                rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
+                rateio_calculado = (frete_total + custos_extras) / qtd_total_manual
             else:
                 rateio_calculado = 0.0
 
             st.session_state["rateio_manual"] = round(rateio_calculado, 4)
-            st.markdown(f"💰 **Rateio Unitário Calculado:** R$ {rateio_calculado:,.4f}")
+            st.markdown(f"💰 **Rateio Unitário Calculado:** {formatar_brl(rateio_calculado, decimais=4)}")
             
             if st.button("🔄 Aplicar Novo Rateio aos Produtos Existentes", key="aplicar_rateio_btn"):
                 # A re-aplicação do rateio exige que se use o df_produtos_manuais como base
@@ -688,7 +737,7 @@ def precificacao_completa():
             with col2:
                 # Informa o rateio atual e altera o input para aceitar apenas os custos ESPECÍFICOS.
                 rateio_manual_atual = st.session_state.get("rateio_manual", 0.0)
-                st.info(f"O Rateio Global por unidade será adicionado automaticamente ao custo total: R$ {rateio_manual_atual:,.4f}")
+                st.info(f"O Rateio Global por unidade será adicionado automaticamente ao custo total: {formatar_brl(rateio_manual_atual, decimais=4)}")
                 
                 # O valor padrão é 0.0, pois o rateio global será adicionado pela função processar_dataframe.
                 custo_extra_produto = st.number_input(
@@ -714,7 +763,7 @@ def precificacao_completa():
                 if custo_total_unitario_com_rateio > 0:
                     margem_calculada = (preco_final_sugerido / custo_total_unitario_com_rateio - 1) * 100
                 margem_manual = round(margem_calculada, 2)
-                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
+                st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:,.2f}%")
                 preco_a_vista_calc = preco_final_sugerido
             else:
                 margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0, key="input_margem_manual")
@@ -722,8 +771,8 @@ def precificacao_completa():
 
             preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
-            st.markdown(f"**Preço à Vista Calculado:** R$ {preco_a_vista_calc:,.2f}")
-            st.markdown(f"**Preço no Cartão Calculado:** R$ {preco_no_cartao_calc:,.2f}")
+            st.markdown(f"**Preço à Vista Calculado:** {formatar_brl(preco_a_vista_calc)}")
+            st.markdown(f"**Preço no Cartão Calculado:** {formatar_brl(preco_no_cartao_calc)}")
 
             with st.form("form_submit_manual"):
                 adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
@@ -791,7 +840,7 @@ def precificacao_completa():
                     cols = st.columns([4, 1])
                     with cols[0]:
                         custo_unit_val = row.get('Custo Unitário', 0.0)
-                        st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário Base: R$ {custo_unit_val:.2f}")
+                        st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário Base: {formatar_brl(custo_unit_val)}")
                     with cols[1]:
                         if st.button(f"❌ Excluir", key=f"excluir_{i}"):
                             st.session_state["produto_para_excluir"] = i
@@ -831,16 +880,24 @@ def precificacao_completa():
         if st.button("🔄 Carregar CSV do GitHub (Tab GitHub)"):
             df_exemplo = load_csv_github(ARQ_CAIXAS)
             if not df_exemplo.empty:
-                df_exemplo["Custos Extras Produto"] = 0.0
-                df_exemplo["Imagem"] = None
+                # Garantir que as colunas calculadas existam para que o processar_dataframe não se perca.
+                # As colunas calculadas serão recriadas pela função processar_dataframe
                 
-                # Garante a nova coluna ao carregar
-                if "Imagem_URL" not in df_exemplo.columns:
-                    df_exemplo["Imagem_URL"] = ""
+                # Filtra colunas que existem no df_exemplo para evitar erro, mas garantindo as de entrada
+                cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+                df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
+                
+                # Adiciona colunas ausentes se necessário para o DF manual
+                if "Custos Extras Produto" not in df_base_loaded.columns:
+                    df_base_loaded["Custos Extras Produto"] = 0.0
+                if "Imagem" not in df_base_loaded.columns:
+                    df_base_loaded["Imagem"] = None
+                if "Imagem_URL" not in df_base_loaded.columns:
+                    df_base_loaded["Imagem_URL"] = ""
 
-                st.session_state.produtos_manuais = df_exemplo.copy()
+                st.session_state.produtos_manuais = df_base_loaded
                 st.session_state.df_produtos_geral = processar_dataframe(
-                    df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
+                    st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
                 )
                 st.success("✅ CSV carregado e processado com sucesso!")
                 exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
@@ -1211,15 +1268,15 @@ def papelaria_aba():
                     "Custo": custo_insumo
                 })
 
-            st.markdown(f"**Custo Total Calculado (Insumos): R$ {custo_total:,.2f}**")
+            st.markdown(f"**Custo Total Calculado (Insumos): {formatar_brl(custo_total)}**")
 
             margem = st.number_input("Margem de Lucro (%)", min_value=0.0, format="%.2f", value=30.0, key="novo_produto_margem")
 
             preco_vista = custo_total * (1 + margem / 100) if custo_total > 0 else 0.0
             preco_cartao = preco_vista / 0.8872 if preco_vista > 0 else 0.0
 
-            st.markdown(f"💸 **Preço à Vista Calculado:** R$ {preco_vista:,.2f}")
-            st.markdown(f"💳 **Preço no Cartão Calculado:** R$ {preco_cartao:,.2f}")
+            st.markdown(f"💸 **Preço à Vista Calculado:** {formatar_brl(preco_vista)}")
+            st.markdown(f"💳 **Preço no Cartão Calculado:** {formatar_brl(preco_cartao)}")
 
             extras_produtos = col_defs_para("Produtos")
             valores_extras_prod = {}
@@ -1268,11 +1325,11 @@ def papelaria_aba():
                             qtd = insumo['Quantidade Usada']
                             un = insumo['Unidade']
                             custo = insumo['Custo']
-                            mensagem += f"• {nome} - {qtd} {un} (R$ {custo:.2f})\n"
+                            mensagem += f"• {nome} - {qtd} {un} ({formatar_brl(custo)})\n" # Formatado em BRL
 
-                        mensagem += f"\n<b>Custo Total:</b> R$ {custo_total:,.2f}"
-                        mensagem += f"\n<b>Preço à Vista:</b> R$ {preco_vista:,.2f}"
-                        mensagem += f"\n<b>Preço no Cartão:</b> R$ {preco_cartao:,.2f}"
+                        mensagem += f"\n<b>Custo Total:</b> {formatar_brl(custo_total)}\n" # Formatado em BRL
+                        mensagem += f"\n<b>Preço à Vista:</b> {formatar_brl(preco_vista)}\n" # Formatado em BRL
+                        mensagem += f"\n<b>Preço no Cartão:</b> {formatar_brl(preco_cartao)}\n" # Formatado em BRL
 
                         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN_SECRET}/sendMessage"
                         payload = {
@@ -1383,9 +1440,9 @@ def papelaria_aba():
                     novo_vista = novo_custo * (1 + nova_margem / 100)
                     novo_cartao = novo_vista / 0.8872
 
-                    st.markdown(f"**Novo custo calculado: R$ {novo_custo:,.2f}**")
-                    st.markdown(f"💸 **Preço à Vista Recalculado:** R$ {novo_vista:,.2f}")
-                    st.markdown(f"💳 **Preço no Cartão Recalculado:** R$ {novo_cartao:,.2f}")
+                    st.markdown(f"**Novo custo calculado: {formatar_brl(novo_custo)}**")
+                    st.markdown(f"💸 **Preço à Vista Recalculado:** {formatar_brl(novo_vista)}")
+                    st.markdown(f"💳 **Preço no Cartão Recalculado:** {formatar_brl(novo_cartao)}")
 
                     valores_extras_edit_p = {}
                     extras_produtos = col_defs_para("Produtos")
