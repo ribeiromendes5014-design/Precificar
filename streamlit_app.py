@@ -13,7 +13,8 @@ import ast
 # ===============================
 
 # Configurações Telegram
-TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9RfwN" # Token fictício para manter a segurança, assumindo que st.secrets será usado no ambiente real
+# CORREÇÃO: O token hardcoded agora é um fallback. O token real deve estar em st.secrets["telegram_token"].
+HARDCODED_TELEGRAM_TOKEN = "8412132908:AAG8N_vFzkpVNX-WN3bwT0Vl3H41Q-9Rfw4"
 TELEGRAM_CHAT_ID = "-1003030758192"
 TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
@@ -66,7 +67,10 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
 
 
 def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
+    # CORREÇÃO: Lê o token de forma segura do Streamlit Secrets, usando o hardcoded como fallback.
+    token = st.secrets.get("telegram_token", HARDCODED_TELEGRAM_TOKEN)
+    
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
     files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
     data = {"chat_id": TELEGRAM_CHAT_ID}
     if thread_id is not None:
@@ -527,7 +531,6 @@ def papelaria_aba():
     # === 2. INICIALIZAÇÃO E ABAS DE GERENCIAMENTO DE ITENS ===
     
     # Variáveis de Configuração
-    # Assumindo que o token está nas secrets do ambiente Streamlit. Se não estiver, use st.session_state.get() ou defina um valor padrão seguro.
     GITHUB_TOKEN = st.secrets.get("github_token", "TOKEN_FICTICIO")
     GITHUB_REPO = "ribeiromendes5014-design/Precificar"
     GITHUB_BRANCH = "main"
@@ -906,7 +909,8 @@ def papelaria_aba():
 
                     # 🔔 Envio da mensagem para o Telegram
                     try:
-                        TELEGRAM_TOKEN_SECRET = st.secrets.get("telegram_token", TELEGRAM_TOKEN) # Usando st.secrets para o token do Telegram
+                        # CORREÇÃO: Usa HARDCODED_TELEGRAM_TOKEN como fallback
+                        TELEGRAM_TOKEN_SECRET = st.secrets.get("telegram_token", HARDCODED_TELEGRAM_TOKEN)
                         TELEGRAM_CHAT_ID_PROD = "-1003030758192"
                         THREAD_ID_PROD = 43
 
