@@ -20,7 +20,7 @@ TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
-    """Gera um PDF formatado a partir do DataFrame de precificação."""
+    """Gera um PDF formatado a partir do DataFrame de precificação, incluindo a URL da imagem."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
@@ -28,16 +28,17 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf.ln(5)
 
     # Configurações de fonte para tabela
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font("Arial", "B", 10) # Fonte menor para caber mais dados
 
     # Definindo largura das colunas (em mm)
     col_widths = {
-        "Produto": 50,
+        "Produto": 40,
         "Qtd": 15,
-        "Custo Unitário": 35,
-        "Margem (%)": 25,
-        "Preço à Vista": 35,
-        "Preço no Cartão": 35
+        "Custo Unitário": 25,
+        "Margem (%)": 20,
+        "Preço à Vista": 25,
+        "Preço no Cartão": 25,
+        "URL da Imagem": 40 # Nova coluna para a URL
     }
     
     # Define as colunas a serem exibidas no PDF
@@ -50,7 +51,7 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf.ln()
 
     # Fonte para corpo da tabela
-    pdf.set_font("Arial", "", 12)
+    pdf.set_font("Arial", "", 8) # Fonte ainda menor para caber a URL
 
     if df.empty:
         pdf.cell(sum(current_widths), 10, "Nenhum produto cadastrado.", border=1, align="C")
@@ -72,6 +73,16 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
                 pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row.get('Preço à Vista', 0.0):.2f}", border=1, align="R")
             if "Preço no Cartão" in pdf_cols:
                 pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row.get('Preço no Cartão', 0.0):.2f}", border=1, align="R")
+            
+            # --- NOVO: URL da Imagem no PDF ---
+            if "URL da Imagem" in pdf_cols:
+                url_display = str(row.get("Imagem_URL", ""))
+                # Limita o tamanho da URL para não quebrar o layout
+                if len(url_display) > 35:
+                    url_display = url_display[:32] + "..."
+                pdf.cell(col_widths["URL da Imagem"], 10, url_display, border=1, align="L", link=str(row.get("Imagem_URL", "")))
+            # --- FIM NOVO ---
+                
             pdf.ln()
 
     pdf_bytes = pdf.output(dest='S').encode('latin1')
@@ -79,104 +90,64 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
 
 
 def enviar_pdf_telegram(pdf_bytesio, df_produtos: pd.DataFrame, thread_id=None):
-    """Envia o arquivo PDF e a primeira imagem (se existir) para o Telegram."""
+    """Envia o arquivo PDF e a primeira imagem (se existir) em mensagens separadas para o Telegram."""
     
-    # Lê o token de forma segura do Streamlit Secrets
     token = st.secrets.get("telegram_token", HARDCODED_TELEGRAM_TOKEN)
     
-    # 1. Tenta encontrar a URL da primeira imagem para enviar como foto
     image_url = None
     image_caption = "Relatório de Precificação"
     
     if not df_produtos.empty and "Imagem_URL" in df_produtos.columns:
-        # Encontra a primeira URL válida no DataFrame
         first_row = df_produtos.iloc[0]
         url = first_row.get("Imagem_URL")
         produto = first_row.get("Produto", "Produto")
         
         if isinstance(url, str) and url.startswith("http"):
             image_url = url
-            image_caption = f"Relatório de Precificação (Produto Principal: {produto})"
+            image_caption = f"📦 Produto Principal: {produto}\n\n[Relatório de Precificação em anexo]"
 
-    # 2. Prepara o envio do PDF
+    # 1. Envia o PDF (mensagem principal)
     
-    # Primeiro, envia a foto (se existir)
+    url_doc = f"https://api.telegram.org/bot{token}/sendDocument"
+    files_doc = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+    data_doc = {"chat_id": TELEGRAM_CHAT_ID, "caption": image_caption if not image_url else "[Relatório de Precificação em anexo]"}
+    if thread_id is not None:
+        data_doc["message_thread_id"] = thread_id
+    
+    resp_doc = requests.post(url_doc, data=data_doc, files=files_doc)
+    resp_doc_json = resp_doc.json()
+    
+    if not resp_doc_json.get("ok"):
+         st.error(f"❌ Erro ao enviar PDF: {resp_doc_json.get('description')}")
+         return
+
+    st.success("✅ PDF enviado para o Telegram.")
+    
+    # 2. Envia a foto (se existir) em uma mensagem separada
     if image_url:
         try:
-            # Tenta baixar a imagem
-            img_response = requests.get(image_url, timeout=10)
-            img_response.raise_for_status()
-            
-            # 3. Envia a imagem como um "document" ou "photo" primeiro
-            # Usaremos sendPhoto, pois a foto será a mensagem principal
             url_photo = f"https://api.telegram.org/bot{token}/sendPhoto"
             
-            # Cria a mensagem (caption) para o PDF, com um link de download para o PDF
-            # Primeiro precisamos enviar o PDF como um documento, para obter o file_id
-            
-            url_doc = f"https://api.telegram.org/bot{token}/sendDocument"
-            files_doc = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
-            data_doc = {"chat_id": TELEGRAM_CHAT_ID, "caption": image_caption}
-            if thread_id is not None:
-                data_doc["message_thread_id"] = thread_id
-            
-            # Envia o PDF como documento
-            resp_doc = requests.post(url_doc, data=data_doc, files=files_doc)
-            resp_doc_json = resp_doc.json()
-            
-            if not resp_doc_json.get("ok"):
-                 st.error(f"Erro ao enviar PDF: {resp_doc_json.get('description')}")
-                 return
-
-            # Se o PDF foi enviado com sucesso, agora enviamos a foto com a caption
-            
-            files_photo = {'photo': ('foto.jpg', img_response.content, img_response.headers.get('Content-Type', 'image/jpeg'))}
-            data_photo = {"chat_id": TELEGRAM_CHAT_ID, "caption": image_caption}
+            # Faz o Telegram buscar a foto diretamente da URL
+            data_photo = {
+                "chat_id": TELEGRAM_CHAT_ID, 
+                "photo": image_url,
+                "caption": f"🖼️ Foto do Produto Principal: {produto}"
+            }
             if thread_id is not None:
                 data_photo["message_thread_id"] = thread_id
 
-            # Envia a foto
-            resp_photo = requests.post(url_photo, data=data_photo, files=files_photo)
+            resp_photo = requests.post(url_photo, data=data_photo)
             resp_photo_json = resp_photo.json()
 
             if resp_photo_json.get("ok"):
-                st.success("✅ PDF e Foto enviados para o Telegram com sucesso!")
+                st.success("✅ Foto do produto principal enviada com sucesso!")
             else:
-                 # Se a foto falhar, pelo menos o PDF já foi enviado
-                 st.warning(f"❌ Erro ao enviar a foto. PDF enviado com sucesso.")
+                 st.warning(f"❌ Erro ao enviar a foto do produto: {resp_photo_json.get('description')}")
                  
         except Exception as e:
-            st.warning(f"⚠️ Erro ao buscar/enviar a imagem. Enviando apenas o PDF. Erro: {e}")
+            st.warning(f"⚠️ Erro ao tentar enviar a imagem. Erro: {e}")
             
-            # Se a imagem falhar, faz o envio normal do PDF (fallback)
-            url = f"https://api.telegram.org/bot{token}/sendDocument"
-            files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
-            data = {"chat_id": TELEGRAM_CHAT_ID}
-            if thread_id is not None:
-                data["message_thread_id"] = thread_id
-
-            response = requests.post(url, data=data, files=files)
-            resp_json = response.json()
-            if not resp_json.get("ok"):
-                st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
-            else:
-                st.success("✅ PDF enviado para o Telegram com sucesso!")
-    
-    else:
-        # Se não há URL de imagem, faz o envio normal do PDF
-        url = f"https://api.telegram.org/bot{token}/sendDocument"
-        files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
-        data = {"chat_id": TELEGRAM_CHAT_ID}
-        if thread_id is not None:
-            data["message_thread_id"] = thread_id
-
-        response = requests.post(url, data=data, files=files)
-        resp_json = response.json()
-        if not resp_json.get("ok"):
-            st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
-        else:
-            st.success("✅ PDF enviado para o Telegram com sucesso!")
-
 
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
     """Exibe os resultados de precificação com tabela e imagens dos produtos."""
