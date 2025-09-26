@@ -117,12 +117,15 @@ if enviar:
             "Forma de Pagamento": forma_pagamento,
             "Tipo": tipo
         }
-        df_atualizado = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
-        if salvar_dados_no_github(df_atualizado, COMMIT_MESSAGE):
-            st.cache_data.clear() # Limpa o cache para forçar recarregar
-            st.rerun() # Reruns the app to show the updated table
-        else:
-            st.error("Falha ao adicionar movimentação.")
+        df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
+
+# --- Botão para Salvar no GitHub ---
+if st.button("Salvar no GitHub"):
+    if salvar_dados_no_github(df, COMMIT_MESSAGE):
+        st.cache_data.clear()
+        st.rerun()
+    else:
+        st.error("Falha ao salvar as alterações. Verifique os logs.")
 
 # --- Exibição e Análises dos Dados ---
 st.subheader("📊 Movimentações Registradas")
@@ -147,12 +150,8 @@ else:
 
     if st.button("Excluir Selecionadas"):
         if indices_a_excluir:
-            df_atualizado = df.drop(indices_a_excluir)
-            if salvar_dados_no_github(df_atualizado, COMMIT_MESSAGE_DELETE):
-                st.cache_data.clear()
-                st.rerun()
-            else:
-                st.error("Falha ao excluir movimentações.")
+            df = df.drop(indices_a_excluir)
+            st.warning("Movimentações excluídas. Clique em 'Salvar no GitHub' para confirmar.")
         else:
             st.warning("Selecione pelo menos uma movimentação para excluir.")
 
