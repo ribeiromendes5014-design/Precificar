@@ -192,8 +192,13 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 st.write(f"💰 Custo Base: R$ {custo_base:.2f}")
 
                 custos_extras_prod = row.get('Custos Extras Produto', 0.0)
-                st.write(f"🛠 Rateio/Extras: R$ {custos_extras_prod:.2f}")
-
+                # Puxa o rateio global unitário calculado na função processar_dataframe
+                rateio_global_unitario = row.get('Rateio Global Unitário', 0.0) 
+                
+                # Exibe a soma dos custos extras específicos (se houver) e o rateio global por unidade
+                rateio_e_extras_display = custos_extras_prod + rateio_global_unitario
+                st.write(f"🛠 Rateio/Extras (Total/Un.): R$ {rateio_e_extras_display:.2f}") # Exibição corrigida
+                
                 if 'Custo Total Unitário' in df.columns:
                     st.write(f"💸 Custo Total/Un: **R$ {custo_total_unitario:.2f}**")
 
@@ -234,40 +239,20 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
             
     # --- Cálculo do Rateio Global ---
     qtd_total = df["Qtd"].sum()
-    rateio_unitario = 0
+    rateio_unitario = 0.0
     if qtd_total > 0:
         rateio_unitario = (frete_total + custos_extras) / qtd_total
 
-    # Aplica o rateio global aos custos extras de cada produto
-    # NOTA: O fluxo original adicionava o rateio ao custo extra do produto. 
-    # Para simplicidade e clareza, aqui estamos apenas substituindo o campo 'Custos Extras Produto' 
-    # pelo rateio global, se o rateio global estiver sendo usado. 
-    # Se você quiser que os custos extras específicos de cada produto sejam MANTIDOS e o rateio
-    # APENAS adicionado, descomente o trecho abaixo e mude a linha de substituição.
-    
-    # df["Custos Extras Produto (Específico)"] = df["Custos Extras Produto"] 
-    # df["Custos Extras Produto"] = df["Custos Extras Produto (Específico)"] + rateio_unitario
-
-    # REVISÃO: Para manter a estrutura e o fluxo mais próximos do original, assumimos que 
-    # 'Custos Extras Produto' é o Custo Extra total (global + específico).
-    # Como o formulário manual já usa o rateio_manual como default para o input
-    # de custo extra, esta abordagem deve funcionar bem:
-    
-    # Se houver rateio global, garante que o custo extra total inclua este rateio
-    if frete_total > 0 or custos_extras > 0:
-        # Aqui assumimos que o campo "Custos Extras Produto" no DataFrame de entrada 
-        # (df_produtos_manuais) já inclui o rateio manual por padrão.
-        # Caso contrário, seria necessário recalcular o rateio para o campo inteiro.
-        # Mantemos o valor original, mas garantimos que o cálculo final inclua
-        # o rateio global, se for diferente dos custos extras específicos.
-        pass
-    else:
-        # Se não há rateio global, os Custos Extras Produto são apenas os específicos (que podem ser 0)
-        pass
-
+    # --- CORREÇÃO: Removido bloco 'pass' ambíguo e aplicado o rateio corretamente ---
+    # A coluna 'Custos Extras Produto' agora será tratada como custos específicos do produto.
+    # O rateio global será adicionado no cálculo do Custo Total Unitário abaixo.
 
     # Calcular o custo total por unidade
-    df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
+    # O rateio_unitario calculado deve ser adicionado ao custo de cada produto.
+    df["Rateio Global Unitário"] = rateio_unitario # Cria a coluna para cálculo e exibição detalhada
+    
+    # O Custo Total Unitário é a soma do Custo Unitário Base + Custos Específicos + Rateio Global.
+    df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"] + df["Rateio Global Unitário"]
 
     # Processar margens conforme o modo selecionado
     if "Margem (%)" not in df.columns:
@@ -285,7 +270,7 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     cols_to_keep = [
         "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
         "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
-        "Imagem", "Imagem_URL" # Adicionada Imagem_URL para persistência no CSV
+        "Imagem", "Imagem_URL", "Rateio Global Unitário" # Adicionada Rateio Global Unitário
     ]
     
     # Mantém apenas as colunas que existem no DF
@@ -701,10 +686,16 @@ def precificacao_completa():
 
                 
             with col2:
-                valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
+                # Informa o rateio atual e altera o input para aceitar apenas os custos ESPECÍFICOS.
+                rateio_manual_atual = st.session_state.get("rateio_manual", 0.0)
+                st.info(f"O Rateio Global por unidade será adicionado automaticamente ao custo total: R$ {rateio_manual_atual:,.4f}")
+                
+                # O valor padrão é 0.0, pois o rateio global será adicionado pela função processar_dataframe.
                 custo_extra_produto = st.number_input(
-                    "💰 Custos extras do Produto (R$) + Rateio Global", min_value=0.0, step=0.01, value=valor_default_rateio, key="input_custo_extra_manual"
+                    # A label foi corrigida para indicar que o usuário deve inserir apenas custos específicos.
+                    "💰 Custos Extras ESPECÍFICOS do Produto (R$)", min_value=0.0, step=0.01, value=0.0, key="input_custo_extra_manual"
                 )
+                
                 preco_final_sugerido = st.number_input(
                     "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01, key="input_preco_sugerido_manual"
                 )
@@ -713,18 +704,21 @@ def precificacao_completa():
                 imagem_file = st.file_uploader("🖼️ Foto do Produto (Upload - opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
 
 
-            custo_total_unitario = valor_pago + custo_extra_produto
+            # Custo total unitário aqui é APENAS para cálculo da margem e preço sugerido (pré-aplicação do rateio)
+            custo_total_unitario_pre_rateio = valor_pago + custo_extra_produto
+            custo_total_unitario_com_rateio = custo_total_unitario_pre_rateio + rateio_manual_atual
+
 
             if preco_final_sugerido > 0:
                 margem_calculada = 0.0
-                if custo_total_unitario > 0:
-                    margem_calculada = (preco_final_sugerido / custo_total_unitario - 1) * 100
+                if custo_total_unitario_com_rateio > 0:
+                    margem_calculada = (preco_final_sugerido / custo_total_unitario_com_rateio - 1) * 100
                 margem_manual = round(margem_calculada, 2)
                 st.info(f"🧮 Margem calculada automaticamente (com base no preço sugerido): {margem_manual:.2f}%")
                 preco_a_vista_calc = preco_final_sugerido
             else:
                 margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0, key="input_margem_manual")
-                preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
+                preco_a_vista_calc = custo_total_unitario_com_rateio * (1 + margem_manual / 100)
 
             preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
@@ -754,7 +748,7 @@ def precificacao_completa():
                             "Produto": [produto],
                             "Qtd": [quantidade],
                             "Custo Unitário": [valor_pago],
-                            "Custos Extras Produto": [custo_extra_produto],
+                            "Custos Extras Produto": [custo_extra_produto], # Aqui salva apenas o custo específico
                             "Margem (%)": [margem_manual],
                             "Imagem": [imagem_bytes],
                             "Imagem_URL": [url_salvar] # Salva a URL para persistência
