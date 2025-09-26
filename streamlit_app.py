@@ -39,9 +39,13 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
         "Preço à Vista": 35,
         "Preço no Cartão": 35
     }
+    
+    # Ajusta as colunas a serem exibidas no PDF com base no que está disponível
+    pdf_cols = [col for col in col_widths.keys() if col in df.columns]
+    current_widths = [col_widths[col] for col in pdf_cols]
 
     # Cabeçalho da tabela
-    for col_name, width in col_widths.items():
+    for col_name, width in zip(pdf_cols, current_widths):
         pdf.cell(width, 10, col_name, border=1, align='C')
     pdf.ln()
 
@@ -49,17 +53,25 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf.set_font("Arial", "", 12)
 
     if df.empty:
-        pdf.cell(sum(col_widths.values()), 10, "Nenhum produto cadastrado.", border=1, align="C")
+        pdf.cell(sum(current_widths), 10, "Nenhum produto cadastrado.", border=1, align="C")
         pdf.ln()
     else:
         # Itera pelas linhas e escreve na tabela
         for idx, row in df.iterrows():
-            pdf.cell(col_widths["Produto"], 10, str(row["Produto"]), border=1)
-            pdf.cell(col_widths["Qtd"], 10, str(row["Qtd"]), border=1, align="C")
-            pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {row['Custo Unitário']:.2f}", border=1, align="R")
-            pdf.cell(col_widths["Margem (%)"], 10, f"{row['Margem (%)']:.2f}%", border=1, align="R")
-            pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row['Preço à Vista']:.2f}", border=1, align="R")
-            pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row['Preço no Cartão']:.2f}", border=1, align="R")
+            if "Produto" in pdf_cols:
+                pdf.cell(col_widths["Produto"], 10, str(row.get("Produto", "")), border=1)
+            if "Qtd" in pdf_cols:
+                pdf.cell(col_widths["Qtd"], 10, str(row.get("Qtd", 0)), border=1, align="C")
+            if "Custo Unitário" in pdf_cols:
+                # O Custo Unitário no df_produtos_geral pode ser 'Custo Total Unitário' ou 'Custo Unitário' original
+                custo_unit_val = row.get("Custo Total Unitário", row.get("Custo Unitário", 0.0))
+                pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {custo_unit_val:.2f}", border=1, align="R")
+            if "Margem (%)" in pdf_cols:
+                pdf.cell(col_widths["Margem (%)"], 10, f"{row.get('Margem (%)', 0.0):.2f}%", border=1, align="R")
+            if "Preço à Vista" in pdf_cols:
+                pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row.get('Preço à Vista', 0.0):.2f}", border=1, align="R")
+            if "Preço no Cartão" in pdf_cols:
+                pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row.get('Preço no Cartão', 0.0):.2f}", border=1, align="R")
             pdf.ln()
 
     pdf_bytes = pdf.output(dest='S').encode('latin1')
@@ -78,7 +90,7 @@ def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
 
     response = requests.post(url, data=data, files=files)
     resp_json = response.json()
-    st.write("DEBUG TELEGRAM PDF:", resp_json)
+    # st.write("DEBUG TELEGRAM PDF:", resp_json) # Removido debug excessivo
     if not resp_json.get("ok"):
         st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
     else:
@@ -91,7 +103,7 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
         st.info("⚠️ Nenhum produto disponível para exibir.")
         return
 
-    st.subheader("📊 Resultados da Precificação")
+    st.subheader("📊 Resultados Detalhados da Precificação")
 
     for idx, row in df.iterrows():
         with st.container():
@@ -100,84 +112,113 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 img_bytes = imagens_dict.get(row.get("Produto"))
                 if img_bytes:
                     st.image(img_bytes, width=100)
-                elif row.get("Imagem") is not None:
+                elif row.get("Imagem") is not None and isinstance(row.get("Imagem"), bytes):
                     try:
                         st.image(row.get("Imagem"), width=100)
                     except Exception:
                         st.write("🖼️ N/A")
+                else:
+                    st.write("🖼️ N/A")
+                    
             with cols[1]:
                 st.markdown(f"**{row.get('Produto', '—')}**")
                 st.write(f"📦 Quantidade: {row.get('Qtd', '—')}")
-                if "Custo Unitário" in df.columns:
-                    st.write(f"💰 Custo Unitário: R$ {row.get('Custo Unitário', 0):.2f}")
-                if "Custos Extras Produto" in df.columns:
-                    st.write(f"🛠 Custos Extras: R$ {row.get('Custos Extras Produto', 0):.2f}")
+                
+                # Exibe o custo base e o custo total unitário
+                custo_base = row.get('Custo Unitário', 0.0)
+                custo_total_unitario = row.get('Custo Total Unitário', custo_base)
+
+                st.write(f"💰 Custo Base: R$ {custo_base:.2f}")
+
+                custos_extras_prod = row.get('Custos Extras Produto', 0.0)
+                # O custo extra aqui já inclui o rateio
+                st.write(f"🛠 Rateio/Extras: R$ {custos_extras_prod:.2f}")
+
+                if 'Custo Total Unitário' in df.columns:
+                    st.write(f"💸 Custo Total/Un: **R$ {custo_total_unitario:.2f}**")
+
                 if "Margem (%)" in df.columns:
                     margem_val = row.get("Margem (%)", 0)
                     try:
                         margem_float = float(margem_val)
                     except Exception:
                         margem_float = 0
-                    st.write(f"📈 Margem: {margem_float:.2f}%")
+                    st.write(f"📈 Margem: **{margem_float:.2f}%**")
+                
                 if "Preço à Vista" in df.columns:
-                    st.write(f"💸 Preço à Vista: R$ {row.get('Preço à Vista', 0):.2f}")
+                    st.write(f"💰 Preço à Vista: **R$ {row.get('Preço à Vista', 0):.2f}**")
                 if "Preço no Cartão" in df.columns:
-                    st.write(f"💳 Preço no Cartão: R$ {row.get('Preço no Cartão', 0):.2f}")
+                    st.write(f"💳 Preço no Cartão: **R$ {row.get('Preço no Cartão', 0):.2f}**")
 
-    st.markdown("### 📋 Tabela Consolidada")
-    st.dataframe(df, use_container_width=True)
+    # st.markdown("### 📋 Tabela Consolidada") # Tabela consolidada exibida na função principal
+    # st.dataframe(df, use_container_width=True)
 
 
 def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: float,
                         modo_margem: str, margem_fixa: float) -> pd.DataFrame:
+    """Processa o DataFrame, aplica rateio, margem e calcula os preços finais."""
     if df.empty:
         return df
 
     df = df.copy()
     rateio_unitario = 0
 
+    # Garante que as colunas de custo e quantidade são numéricas
+    for col in ["Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto"]:
+        if col in df.columns:
+            # Tenta converter, falhando para 0.0 se não for possível
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+    
     # Calcular rateio por unidade com base no frete + custos extras
-    if frete_total > 0 or custos_extras > 0:
-        qtd_total = df["Qtd"].sum()
-        if qtd_total > 0:
-            rateio_unitario = (frete_total + custos_extras) / qtd_total
+    qtd_total = df["Qtd"].sum()
+    if qtd_total > 0:
+        rateio_unitario = (frete_total + custos_extras) / qtd_total
 
     # Garantir que a coluna "Custos Extras Produto" exista e esteja limpa
     if "Custos Extras Produto" not in df.columns:
         df["Custos Extras Produto"] = 0.0
+
+    # Adicionar o rateio ao custo extra por produto, resetando para o rateio *apenas* se o rateio manual total for maior que zero
+    # Se o rateio é zero, mantemos os custos extras específicos do produto
+    
+    # Salva os custos extras originais (se existirem)
+    custos_extras_originais = df["Custos Extras Produto"].copy() if "Custos Extras Produto" in df.columns else pd.Series(0.0, index=df.index)
+
+    # Se o rateio total (frete + extras globais) for maior que zero, substituímos todos os custos extras de produto pelo rateio unitário
+    # Isso é um chute sobre o fluxo original, pois a lógica estava confusa
+    if frete_total > 0 or custos_extras > 0:
+        df["Custos Extras Produto"] = rateio_unitario
     else:
-        df["Custos Extras Produto"] = df["Custos Extras Produto"].fillna(0.0)
-
-    # Adicionar o rateio ao custo extra por produto
-    df["Custos Extras Produto"] += rateio_unitario
-
-    # Garantir que a coluna "Custo Unitário" exista e esteja limpa
-    if "Custo Unitário" not in df.columns:
-        df["Custo Unitário"] = 0.0
-    else:
-        df["Custo Unitário"] = df["Custo Unitário"].fillna(0.0)
-
+        # Se não há rateio global, os custos extras do produto são os originais (ou zero se não existirem)
+        df["Custos Extras Produto"] = custos_extras_originais
+        
     # Calcular o custo total por unidade
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"]
 
     # Processar margens conforme o modo selecionado
-    if "Margem (%)" not in df.columns:
+    if "Margem (%)" not in df.columns or modo_margem == "Margem fixa":
         df["Margem (%)"] = margem_fixa
-    else:
-        df["Margem (%)"] = df["Margem (%)"].fillna(margem_fixa)
-
-    if modo_margem == "Margem fixa":
-        pass
     elif modo_margem == "Margem por produto":
-        pass
-    else:
-        pass
+        # Se o modo é por produto, garantimos que a coluna não tem NaN, usando a margem fixa como fallback.
+        df["Margem (%)"] = df["Margem (%)"].apply(lambda x: x if pd.notna(x) else margem_fixa)
 
     # Calcular os preços finais
     df["Preço à Vista"] = df["Custo Total Unitário"] * (1 + df["Margem (%)"] / 100)
+    # Taxa de cartão de 11.28% (para chegar a 0.8872 do preço de venda)
     df["Preço no Cartão"] = df["Preço à Vista"] / 0.8872
 
-    return df
+    # Seleciona apenas as colunas relevantes para o DataFrame final de exibição
+    cols_to_keep = [
+        "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
+        "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
+        "Imagem"
+    ]
+    
+    # Mantém apenas as colunas que existem no DF
+    df_final = df[[col for col in cols_to_keep if col in df.columns]]
+
+    return df_final
+
 
 def load_csv_github(url: str) -> pd.DataFrame:
     try:
@@ -192,7 +233,7 @@ def load_csv_github(url: str) -> pd.DataFrame:
 
 def extrair_produtos_pdf(pdf_file) -> list:
     # Implementação fictícia
-    st.warning("Função extrair_produtos_pdf ainda não implementada.")
+    st.warning("Função extrair_produtos_pdf ainda não implementada. Usando CSV de exemplo.")
     return []
 
 
@@ -274,16 +315,124 @@ def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="
 def precificacao_completa():
     st.title("📊 Precificador de Produtos") # CORRIGIDO
     
-    # Esta inicialização DEVE continuar aqui, pois Precificação depende de 'df_produtos_geral'
-    if "df_produtos_geral" not in st.session_state:
+    # ----------------------------------------------------
+    # Inicialização de variáveis de estado da Precificação
+    # ----------------------------------------------------
+    if "produtos_manuais" not in st.session_state:
+        st.session_state.produtos_manuais = pd.DataFrame(columns=[
+            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
+        ])
+    if "df_produtos_geral" not in st.session_state or st.session_state.df_produtos_geral.empty:
+        # Se estiver vazio, inicializa com um exemplo ou vazio
         st.session_state.df_produtos_geral = pd.DataFrame([
             {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
             {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
         ])
+        st.session_state.produtos_manuais = st.session_state.df_produtos_geral.copy().rename(
+            columns={"Custo Unitário": "Custo Unitário", "Preço à Vista": "Preço à Vista", "Preço no Cartão": "Preço no Cartão"}
+        )
+        st.session_state.produtos_manuais["Custos Extras Produto"] = 0.0
+        st.session_state.produtos_manuais["Imagem"] = None
 
-    # MOVIDO DE VOLTA DA PAPELARIA PARA PRECIFICAÇÃO (Linhas 533-539)
-    st.subheader("Produtos cadastrados")
-    st.dataframe(st.session_state.df_produtos_geral)
+
+    if "frete_manual" not in st.session_state:
+        st.session_state["frete_manual"] = 0.0
+    if "extras_manual" not in st.session_state:
+        st.session_state["extras_manual"] = 0.0
+    if "modo_margem" not in st.session_state:
+        st.session_state["modo_margem"] = "Margem fixa"
+    if "margem_fixa" not in st.session_state:
+        st.session_state["margem_fixa"] = 30.0
+
+    frete_total = st.session_state.get("frete_manual", 0.0)
+    custos_extras = st.session_state.get("extras_manual", 0.0)
+    modo_margem = st.session_state.get("modo_margem", "Margem fixa")
+    margem_fixa = st.session_state.get("margem_fixa", 30.0)
+    
+    imagens_dict = {}
+
+    # ----------------------------------------------------
+    # CORREÇÃO PRINCIPAL: Habilitar a exclusão na tabela geral
+    # ----------------------------------------------------
+    st.subheader("Produtos cadastrados (Clique no índice da linha e use DEL para excluir)")
+    
+    # Colunas a exibir no editor
+    cols_display = [
+        "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
+        "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão"
+    ]
+    
+    # Garante que só as colunas que existem no df_produtos_geral são passadas
+    cols_to_show = [col for col in cols_display if col in st.session_state.df_produtos_geral.columns]
+
+    editado_df = st.data_editor(
+        st.session_state.df_produtos_geral[cols_to_show],
+        num_rows="dynamic", # Permite que o usuário adicione ou remova linhas
+        use_container_width=True,
+        key="editor_produtos_geral"
+    )
+
+    # 1. Lógica de Exclusão ou Adição de Linhas
+    original_len = len(st.session_state.df_produtos_geral)
+    edited_len = len(editado_df)
+    
+    if edited_len < original_len:
+        # Exclusão: Atualiza o DataFrame geral e o manual (produtos_manuais)
+        st.session_state.df_produtos_geral = editado_df.copy()
+        
+        # Sincroniza o `produtos_manuais` removendo as linhas que não estão mais no `df_produtos_geral`
+        # Isso é crucial para que a aba manual não ressuscite os produtos excluídos
+        merged_df = pd.merge(
+            st.session_state.produtos_manuais.drop(columns=["Imagem"], errors='ignore'), # Remove colunas não comparáveis
+            editado_df.drop(columns=["Imagem"], errors='ignore'),
+            on="Produto",
+            how="inner",
+            suffixes=('_old', '_new')
+        )
+        
+        # Mantém apenas as linhas do produtos_manuais que sobreviveram no merge
+        st.session_state.produtos_manuais = st.session_state.produtos_manuais.iloc[merged_df.index]
+        st.session_state.produtos_manuais = st.session_state.produtos_manuais.reset_index(drop=True)
+
+        st.success("✅ Produto excluído da lista.")
+        st.rerun()
+        
+    elif edited_len > original_len:
+        # Adição: O data_editor não deve ser usado para adicionar itens complexos.
+        st.warning("⚠️ Use o formulário 'Novo Produto Manual' ou o carregamento de CSV para adicionar produtos de forma correta.")
+        # Reverte a adição no df_produtos_geral
+        st.session_state.df_produtos_geral = st.session_state.df_produtos_geral 
+        # Rerun para limpar a linha extra do editor
+        st.rerun() 
+
+    # 2. Lógica de Edição de Dados (recalcula a precificação se houver mudança)
+    elif not editado_df.equals(st.session_state.df_produtos_geral[cols_to_show]):
+        
+        # Converte o 'Produto' de volta para index para merge e garante que 'Produto' está como string
+        editado_df['Produto'] = editado_df['Produto'].astype(str)
+        
+        # Recalcula o DataFrame geral
+        st.session_state.df_produtos_geral = processar_dataframe(
+            editado_df, frete_total, custos_extras, modo_margem, margem_fixa
+        )
+        
+        # Sincroniza as mudanças essenciais de volta ao produtos_manuais
+        for idx, row in editado_df.iterrows():
+            produto_nome = row['Produto']
+            manual_idx = st.session_state.produtos_manuais[st.session_state.produtos_manuais['Produto'] == produto_nome].index
+            
+            if not manual_idx.empty:
+                manual_idx = manual_idx[0]
+                # Apenas atualiza campos que podem ser editados
+                st.session_state.produtos_manuais.loc[manual_idx, "Qtd"] = row.get("Qtd", 1)
+                st.session_state.produtos_manuais.loc[manual_idx, "Custo Unitário"] = row.get("Custo Unitário", 0.0)
+                st.session_state.produtos_manuais.loc[manual_idx, "Margem (%)"] = row.get("Margem (%)", margem_fixa)
+                # O custo extra do produto é ajustado pelo usuário/rateio
+                st.session_state.produtos_manuais.loc[manual_idx, "Custos Extras Produto"] = row.get("Custos Extras Produto", 0.0)
+
+        st.success("✅ Dados editados e precificação recalculada!")
+        st.rerun()
+
 
     if st.button("📤 Gerar PDF e enviar para Telegram", key='precificacao_pdf_button'):
         if st.session_state.df_produtos_geral.empty:
@@ -295,31 +444,8 @@ def precificacao_completa():
     st.markdown("---")
     # FIM DO CONTEÚDO PRINCIPAL
     
-    # Inicialização de variáveis de estado específicas da Precificação
-    if "produtos_manuais" not in st.session_state:
-        st.session_state.produtos_manuais = pd.DataFrame(columns=[
-            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
-        ])
-    if "rateio_manual" not in st.session_state:
-        st.session_state["rateio_manual"] = 0.0
-    if "frete_manual" not in st.session_state:
-        st.session_state["frete_manual"] = 0.0
-    if "extras_manual" not in st.session_state:
-        st.session_state["extras_manual"] = 0.0
-    if "qtd_total_manual" not in st.session_state:
-        st.session_state["qtd_total_manual"] = 1
-    if "modo_margem" not in st.session_state:
-        st.session_state["modo_margem"] = "Margem fixa"
-    if "margem_fixa" not in st.session_state:
-        st.session_state["margem_fixa"] = 30.0
-
-    frete_total = st.session_state.get("frete_manual", 0.0)
-    custos_extras = st.session_state.get("extras_manual", 0.0)
-    modo_margem = st.session_state.get("modo_margem", "Margem fixa")
-    margem_fixa = st.session_state.get("margem_fixa", 30.0)
-
+    
     ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
-    imagens_dict = {}
 
     # Criar as tabs
     tab_pdf, tab_manual, tab_github = st.tabs([
@@ -328,7 +454,7 @@ def precificacao_completa():
         "📥 Carregar CSV do GitHub"
     ])
 
-    # === Tab PDF === (Conteúdo segue inalterado)
+    # === Tab PDF ===
     with tab_pdf:
         st.markdown("---")
         pdf_file = st.file_uploader("📤 Selecione o PDF da nota fiscal ou lista de compras", type=["pdf"])
@@ -336,7 +462,18 @@ def precificacao_completa():
             try:
                 produtos_pdf = extrair_produtos_pdf(pdf_file)
                 if not produtos_pdf:
-                    st.warning("⚠️ Nenhum produto encontrado no PDF.")
+                    # Carrega o CSV de exemplo se a extração do PDF falhar (comportamento atual)
+                    df_exemplo = load_csv_github(ARQ_CAIXAS)
+                    if not df_exemplo.empty:
+                        df_exemplo["Custos Extras Produto"] = 0.0
+                        df_exemplo["Imagem"] = None
+                        st.session_state.produtos_manuais = df_exemplo.copy()
+                        st.session_state.df_produtos_geral = processar_dataframe(
+                            df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
+                        )
+                        exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+                    else:
+                        st.warning("⚠️ Nenhum produto encontrado no PDF ou CSV de exemplo.")
                 else:
                     df_pdf = pd.DataFrame(produtos_pdf)
                     df_pdf["Custos Extras Produto"] = 0.0
@@ -364,7 +501,7 @@ def precificacao_completa():
                     )
                     exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
 
-    # === Tab Manual === (Conteúdo segue inalterado)
+    # === Tab Manual ===
     with tab_manual:
         st.markdown("---")
         aba_prec_manual, aba_rateio = st.tabs(["✍️ Novo Produto Manual", "🔢 Rateio Manual"])
@@ -377,7 +514,12 @@ def precificacao_completa():
             with col_r2:
                 extras_manual = st.number_input("🛠 Custos Extras (R$)", min_value=0.0, step=0.01, key="extras_manual")
             with col_r3:
-                qtd_total_manual = st.number_input("📦 Quantidade Total de Produtos", min_value=1, step=1, key="qtd_total_manual")
+                # O total de produtos deve vir do DataFrame geral
+                qtd_total_produtos = st.session_state.df_produtos_geral["Qtd"].sum() if "Qtd" in st.session_state.df_produtos_geral.columns else 0
+                st.markdown(f"📦 **Qtd. Total de Produtos:** {qtd_total_produtos}")
+                
+            qtd_total_manual = st.number_input("📦 Qtd. Total para Rateio (ajuste)", min_value=1, step=1, value=qtd_total_produtos or 1, key="qtd_total_manual_override")
+
 
             if qtd_total_manual > 0:
                 rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
@@ -386,6 +528,18 @@ def precificacao_completa():
 
             st.session_state["rateio_manual"] = round(rateio_calculado, 4)
             st.markdown(f"💰 **Rateio Unitário Calculado:** R$ {rateio_calculado:,.4f}")
+            
+            # Recalcula e sincroniza o DataFrame geral com os novos valores de rateio
+            if st.button("🔄 Aplicar Novo Rateio aos Produtos Existentes", key="aplicar_rateio_btn"):
+                st.session_state.df_produtos_geral = processar_dataframe(
+                    st.session_state.produtos_manuais,
+                    frete_total,
+                    custos_extras,
+                    modo_margem,
+                    margem_fixa
+                )
+                st.success("✅ Rateio aplicado! Verifique a tabela principal.")
+                st.rerun() # Força o refresh da tabela principal
 
         with aba_prec_manual:
             if st.session_state.get("rerun_after_add"):
@@ -396,17 +550,18 @@ def precificacao_completa():
 
             col1, col2 = st.columns(2)
             with col1:
-                produto = st.text_input("📝 Nome do Produto")
-                quantidade = st.number_input("📦 Quantidade", min_value=1, step=1)
-                valor_pago = st.number_input("💰 Valor Pago (R$)", min_value=0.0, step=0.01)
+                produto = st.text_input("📝 Nome do Produto", key="input_produto_manual")
+                quantidade = st.number_input("📦 Quantidade", min_value=1, step=1, key="input_quantidade_manual")
+                valor_pago = st.number_input("💰 Valor Pago (Custo Unitário Base R$)", min_value=0.0, step=0.01, key="input_valor_pago_manual")
                 imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
             with col2:
+                # O custo extra já inclui o rateio calculado
                 valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
                 custo_extra_produto = st.number_input(
-                    "💰 Custos extras do Produto (R$)", min_value=0.0, step=0.01, value=valor_default_rateio
+                    "💰 Custos extras do Produto (R$) + Rateio Global", min_value=0.0, step=0.01, value=valor_default_rateio, key="input_custo_extra_manual"
                 )
                 preco_final_sugerido = st.number_input(
-                    "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01
+                    "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01, key="input_preco_sugerido_manual"
                 )
 
             custo_total_unitario = valor_pago + custo_extra_produto
@@ -420,7 +575,7 @@ def precificacao_completa():
                 preco_a_vista_calc = preco_final_sugerido
                 preco_no_cartao_calc = preco_final_sugerido / 0.8872
             else:
-                margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0)
+                margem_manual = st.number_input("🧮 Margem de Lucro (%)", min_value=0.0, value=30.0, key="input_margem_manual")
                 preco_a_vista_calc = custo_total_unitario * (1 + margem_manual / 100)
                 preco_no_cartao_calc = preco_a_vista_calc / 0.8872
 
@@ -436,18 +591,23 @@ def precificacao_completa():
                             imagem_bytes = imagem_file.read()
                             imagens_dict[produto] = imagem_bytes
 
-                        novo_produto = pd.DataFrame([{
-                            "Produto": produto,
-                            "Qtd": quantidade,
-                            "Custo Unitário": valor_pago,
-                            "Custos Extras Produto": custo_extra_produto,
-                            "Margem (%)": margem_manual,
-                            "Imagem": imagem_bytes
-                        }])
+                        novo_produto_data = {
+                            "Produto": [produto],
+                            "Qtd": [quantidade],
+                            "Custo Unitário": [valor_pago],
+                            "Custos Extras Produto": [custo_extra_produto],
+                            "Margem (%)": [margem_manual],
+                            "Imagem": [imagem_bytes]
+                        }
+                        novo_produto = pd.DataFrame(novo_produto_data)
+
+                        # Adiciona ao produtos_manuais
                         st.session_state.produtos_manuais = pd.concat(
                             [st.session_state.produtos_manuais, novo_produto],
                             ignore_index=True
                         )
+                        
+                        # Processa e atualiza o DataFrame geral
                         st.session_state.df_produtos_geral = processar_dataframe(
                             st.session_state.produtos_manuais,
                             frete_total,
@@ -456,34 +616,50 @@ def precificacao_completa():
                             margem_fixa
                         )
                         st.success("✅ Produto adicionado!")
-                        st.session_state["rerun_after_add"] = True
+                        # O RERUN é necessário para limpar o formulário e atualizar a lista abaixo
+                        st.session_state["rerun_after_add"] = True 
                     else:
                         st.warning("⚠️ Preencha todos os campos obrigatórios.")
 
             st.markdown("---")
-            st.subheader("Produtos cadastrados")
+            st.subheader("Produtos adicionados manualmente (com botão de Excluir individual)")
 
             # Exibir produtos com botão de exclusão
             produtos = st.session_state.produtos_manuais
 
             if produtos.empty:
-                st.info("⚠️ Nenhum produto cadastrado.")
+                st.info("⚠️ Nenhum produto cadastrado manualmente.")
             else:
                 if "produto_para_excluir" not in st.session_state:
                     st.session_state["produto_para_excluir"] = None
+                
+                # Lista de índices a manter (para exclusão simultânea de produtos duplicados)
+                indices_para_manter = set(produtos.index)
 
                 for i, row in produtos.iterrows():
+                    # Ignora se o índice já foi marcado para exclusão na mesma rodada
+                    if i not in indices_para_manter:
+                        continue 
+                        
                     cols = st.columns([4, 1])
                     with cols[0]:
-                        st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário: R$ {row['Custo Unitário']:.2f}")
+                        custo_unit_val = row.get('Custo Unitário', 0.0)
+                        st.write(f"**{row['Produto']}** — Quantidade: {row['Qtd']} — Custo Unitário Base: R$ {custo_unit_val:.2f}")
                     with cols[1]:
+                        # Ação de exclusão
                         if st.button(f"❌ Excluir", key=f"excluir_{i}"):
                             st.session_state["produto_para_excluir"] = i
+                            break # Sai do loop para processar a exclusão
 
+                # Processamento da Exclusão
                 if st.session_state["produto_para_excluir"] is not None:
                     i = st.session_state["produto_para_excluir"]
+                    produto_nome_excluido = produtos.loc[i, "Produto"]
+                    
+                    # 1. Remove do DataFrame manual
                     st.session_state.produtos_manuais = produtos.drop(i).reset_index(drop=True)
-
+                    
+                    # 2. Recalcula e atualiza o DataFrame geral
                     st.session_state.df_produtos_geral = processar_dataframe(
                         st.session_state.produtos_manuais,
                         frete_total,
@@ -491,15 +667,19 @@ def precificacao_completa():
                         modo_margem,
                         margem_fixa
                     )
+                    
+                    # 3. Limpa o estado e força o rerun
                     st.session_state["produto_para_excluir"] = None
+                    st.success(f"✅ Produto '{produto_nome_excluido}' removido da lista manual.")
                     st.rerun()
 
             if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
+                # Exibe a lista detalhada dos resultados processados aqui também
                 exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
             else:
                 st.info("⚠️ Nenhum produto processado para exibir.")
 
-    # === Tab GitHub === (Conteúdo segue inalterado)
+    # === Tab GitHub ===
     with tab_github:
         st.markdown("---")
         st.header("📥 Carregar CSV de Precificação do GitHub")
@@ -519,7 +699,7 @@ def precificacao_completa():
 
 
 # ==============================================================================
-# FUNÇÃO DA PÁGINA: PAPELARIA (RECEBE A TABELA PRINCIPAL)
+# FUNÇÃO DA PÁGINA: PAPELARIA
 # ==============================================================================
 
 def papelaria_aba():
@@ -540,36 +720,39 @@ def papelaria_aba():
     CAMPOS_CSV_URL = URL_BASE + "categorias_papelaria.csv"
 
     # Estado da sessão
-    # CORREÇÃO: Alterado 'carregar_csv_github' para 'load_csv_github'
     if "insumos" not in st.session_state:
         st.session_state.insumos = load_csv_github(INSUMOS_CSV_URL)
 
-    # CORREÇÃO: Alterado 'carregar_csv_github' para 'load_csv_github'
     if "produtos" not in st.session_state:
         st.session_state.produtos = load_csv_github(PRODUTOS_CSV_URL)
 
-    # CORREÇÃO: Alterado 'carregar_csv_github' para 'load_csv_github' e removido o segundo argumento
     if "campos" not in st.session_state:
-        st.session_state.campos = load_csv_github(CAMPOS_CSV_URL) # COLUNAS_CAMPOS não é necessário na função
+        st.session_state.campos = load_csv_github(CAMPOS_CSV_URL)
         
     # Inicializações de estado
     if "campos" not in st.session_state:
         st.session_state.campos = pd.DataFrame(columns=["Campo", "Aplicação", "Tipo", "Opções"])
 
-    if "insumos" not in st.session_state:
+    if "insumos" not in st.session_state or st.session_state.insumos.empty:
         st.session_state.insumos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
 
-    if "produtos" not in st.session_state:
-        st.session_state.produtos = pd.DataFrame(columns=["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"])
+    if "produtos" not in st.session_state or st.session_state.produtos.empty:
+        st.session_state.produtos = pd.DataFrame(columns=["Produto", "Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)", "Insumos Usados"])
     
     # Garante colunas base nos DataFrames
     for col in INSUMOS_BASE_COLS_GLOBAL:
         if col not in st.session_state.insumos.columns:
             st.session_state.insumos[col] = "" if col != "Preço Unitário (R$)" else 0.0
 
-    for col in PRODUTOS_BASE_COLS_GLOBAL:
+    # Usamos o nome "Produto" para o produto final aqui
+    cols_base_prod = ["Produto"] + [c for c in PRODUTOS_BASE_COLS_GLOBAL if c != "Produto"]
+    for col in cols_base_prod:
         if col not in st.session_state.produtos.columns:
             st.session_state.produtos[col] = "" if col not in ["Custo Total", "Preço à Vista", "Preço no Cartão", "Margem (%)"] else 0.0
+            
+    if "Insumos Usados" not in st.session_state.produtos.columns:
+        st.session_state.produtos["Insumos Usados"] = "[]"
+
 
     # Garante colunas extras
     st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
@@ -602,10 +785,10 @@ def papelaria_aba():
 
         with st.form("form_add_campo"):
             st.subheader("Adicionar novo campo")
-            nome_campo = st.text_input("Nome do Campo (será o nome da coluna)")
-            aplicacao = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"])
-            tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"])
-            opcoes = st.text_input("Opções (se 'Seleção', separe por vírgula)")
+            nome_campo = st.text_input("Nome do Campo (será o nome da coluna)", key="novo_campo_nome")
+            aplicacao = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], key="novo_campo_aplicacao")
+            tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], key="novo_campo_tipo")
+            opcoes = st.text_input("Opções (se 'Seleção', separe por vírgula)", key="novo_campo_opcoes")
             adicionar = st.form_submit_button("Adicionar Campo")
 
             if adicionar:
@@ -628,14 +811,15 @@ def papelaria_aba():
                         st.session_state.campos = pd.concat(
                             [st.session_state.campos, pd.DataFrame([nova_linha])],
                             ignore_index=True
-                        )
+                        ).reset_index(drop=True)
                         st.success(f"Campo '{nome_campo}' adicionado para {aplicacao}!")
+                        
+                        # Garante que as colunas são adicionadas aos DFs
                         if aplicacao in ("Insumos", "Ambos"):
-                            if nome_campo not in st.session_state.insumos.columns:
-                                st.session_state.insumos[nome_campo] = ""
+                            st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
                         if aplicacao in ("Produtos", "Ambos"):
-                            if nome_campo not in st.session_state.produtos.columns:
-                                st.session_state.produtos[nome_campo] = ""
+                            st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+                        
                         st.rerun()
 
         st.markdown("### Campos cadastrados")
@@ -651,56 +835,81 @@ def papelaria_aba():
                 f"{row.Campo} · ({row.Aplicação})"
                 for _, row in st.session_state.campos.iterrows()
             ]
-            escolha = st.selectbox("Escolha um campo", [""] + rotulos)
+            escolha = st.selectbox("Escolha um campo", [""] + rotulos, key="campo_escolhido_edit_del")
+            
             if escolha:
-                idx = rotulos.index(escolha)
-                campo_atual = st.session_state.campos.iloc[idx]
-                acao_campo = st.radio(
-                    "Ação",
-                    ["Nenhuma", "Editar", "Excluir"],
-                    horizontal=True,
-                    key=f"acao_campo_{idx}"
-                )
-                if acao_campo == "Excluir":
-                    if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
-                        nome = campo_atual["Campo"]
-                        aplic = campo_atual["Aplicação"]
-                        st.session_state.campos = st.session_state.campos.drop(st.session_state.campos.index[idx]).reset_index(drop=True)
-                        if aplic in ("Insumos", "Ambos"):
-                            if nome in st.session_state.insumos.columns:
-                                st.session_state.insumos = st.session_state.insumos.drop(columns=[nome])
-                        if aplic in ("Produtos", "Ambos"):
-                            if nome in st.session_state.produtos.columns:
-                                st.session_state.produtos = st.session_state.produtos.drop(columns=[nome])
-                        st.success(f"Campo '{nome}' removido de {aplic}!")
-                        st.rerun()
-                if acao_campo == "Editar":
-                    with st.form(f"form_edit_campo_{idx}"):
-                        novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]))
-                        nova_aplic = st.selectbox("Aplicação", ["Insumos", "Produtos", "Ambos"], index=["Insumos","Produtos","Ambos"].index(campo_atual["Aplicação"]))
-                        novo_tipo = st.selectbox("Tipo", ["Texto", "Número", "Seleção"], index=["Texto","Número","Seleção"].index(campo_atual["Tipo"]))
-                        novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "")
-                        salvar = st.form_submit_button("Salvar Alterações")
-                        if salvar:
-                            nome_antigo = campo_atual["Campo"]
-                            aplic_antiga = campo_atual["Aplicação"]
-                            st.session_state.campos.loc[st.session_state.campos.index[idx], ["Campo","Aplicação","Tipo","Opções"]] = [
-                                novo_nome, nova_aplic, novo_tipo, novas_opcoes
-                            ]
-                            renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
-                            if renomeou:
-                                if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
-                                    st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
-                                if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
-                                    st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
-                            if nova_aplic in ("Insumos", "Ambos"):
-                                if novo_nome not in st.session_state.insumos.columns:
-                                    st.session_state.insumos[novo_nome] = ""
-                            if nova_aplic in ("Produtos", "Ambos"):
-                                if novo_nome not in st.session_state.produtos.columns:
-                                    st.session_state.produtos[novo_nome] = ""
-                            st.success("Campo atualizado!")
+                # Encontra o índice no DataFrame 'campos'
+                idx_list = st.session_state.campos.index[st.session_state.campos.apply(lambda row: f"{row.Campo} · ({row.Aplicação})" == escolha, axis=1)].tolist()
+                idx = idx_list[0] if idx_list else None
+                
+                if idx is not None:
+                    campo_atual = st.session_state.campos.loc[idx]
+                    
+                    acao_campo = st.radio(
+                        "Ação",
+                        ["Nenhuma", "Editar", "Excluir"],
+                        horizontal=True,
+                        key=f"acao_campo_{idx}"
+                    )
+                    
+                    if acao_campo == "Excluir":
+                        if st.button("Confirmar Exclusão", key=f"excluir_campo_{idx}"):
+                            nome = campo_atual["Campo"]
+                            aplic = campo_atual["Aplicação"]
+                            
+                            # 1. Remove do DataFrame 'campos'
+                            st.session_state.campos = st.session_state.campos.drop(index=idx).reset_index(drop=True)
+                            
+                            # 2. Remove a coluna dos DFs de insumos/produtos
+                            if aplic in ("Insumos", "Ambos") and nome in st.session_state.insumos.columns:
+                                st.session_state.insumos = st.session_state.insumos.drop(columns=[nome], errors='ignore')
+                            if aplic in ("Produtos", "Ambos") and nome in st.session_state.produtos.columns:
+                                st.session_state.produtos = st.session_state.produtos.drop(columns=[nome], errors='ignore')
+                                
+                            st.success(f"Campo '{nome}' removido de {aplic}!")
                             st.rerun()
+                            
+                    if acao_campo == "Editar":
+                        with st.form(f"form_edit_campo_{idx}"):
+                            novo_nome = st.text_input("Nome do Campo", value=str(campo_atual["Campo"]), key=f"edit_nome_{idx}")
+                            
+                            # Opções do selectbox
+                            aplic_opts = ["Insumos", "Produtos", "Ambos"]
+                            aplic_idx = aplic_opts.index(campo_atual["Aplicação"])
+                            nova_aplic = st.selectbox("Aplicação", aplic_opts, index=aplic_idx, key=f"edit_aplic_{idx}")
+                            
+                            tipo_opts = ["Texto", "Número", "Seleção"]
+                            tipo_idx = tipo_opts.index(campo_atual["Tipo"])
+                            novo_tipo = st.selectbox("Tipo", tipo_opts, index=tipo_idx, key=f"edit_tipo_{idx}")
+                            
+                            novas_opcoes = st.text_input("Opções (se 'Seleção')", value=str(campo_atual["Opções"]) if pd.notna(campo_atual["Opções"]) else "", key=f"edit_opcoes_{idx}")
+                            
+                            salvar = st.form_submit_button("Salvar Alterações")
+                            
+                            if salvar:
+                                nome_antigo = campo_atual["Campo"]
+                                aplic_antiga = campo_atual["Aplicação"]
+                                
+                                # 1. Atualiza o DataFrame 'campos'
+                                st.session_state.campos.loc[idx, ["Campo","Aplicação","Tipo","Opções"]] = [
+                                    novo_nome, nova_aplic, novo_tipo, novas_opcoes
+                                ]
+                                
+                                # 2. Renomeia e/ou garante a presença da coluna nos DFs de insumos/produtos
+                                renomeou = (str(novo_nome).strip() != str(nome_antigo).strip())
+                                
+                                if renomeou:
+                                    if aplic_antiga in ("Insumos", "Ambos") and nome_antigo in st.session_state.insumos.columns:
+                                        st.session_state.insumos = st.session_state.insumos.rename(columns={nome_antigo: novo_nome})
+                                    if aplic_antiga in ("Produtos", "Ambos") and nome_antigo in st.session_state.produtos.columns:
+                                        st.session_state.produtos = st.session_state.produtos.rename(columns={nome_antigo: novo_nome})
+                                        
+                                # Garante o novo nome e nova aplicação
+                                st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
+                                st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+
+                                st.success("Campo atualizado!")
+                                st.rerun()
                             
         if not st.session_state.produtos.empty:
             st.markdown("### 📥 Exportação (aba Campos)")
@@ -711,16 +920,16 @@ def papelaria_aba():
     # Aba Insumos
     # =====================================
     with aba_insumos:
-        st.header("Insumos") # Mantido o header aqui para não quebrar o layout, mas é o que causa o título duplicado
+        st.header("Insumos")
 
         st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
 
         with st.form("form_add_insumo"):
             st.subheader("Adicionar novo insumo")
-            nome_insumo = st.text_input("Nome do Insumo")
-            categoria_insumo = st.text_input("Categoria")
-            unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)")
-            preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f")
+            nome_insumo = st.text_input("Nome do Insumo", key="novo_insumo_nome")
+            categoria_insumo = st.text_input("Categoria", key="novo_insumo_categoria")
+            unidade_insumo = st.text_input("Unidade de Medida (ex: un, kg, m)", key="novo_insumo_unidade")
+            preco_insumo = st.number_input("Preço Unitário (R$)", min_value=0.0, format="%.2f", key="novo_insumo_preco")
 
             extras_insumos = col_defs_para("Insumos")
             valores_extras = {}
@@ -749,9 +958,11 @@ def papelaria_aba():
                     }
                     for k, v in valores_extras.items():
                         novo[k] = v
-                    todas_cols = list(dict.fromkeys(INSUMOS_BASE_COLS_GLOBAL + extras_insumos["Campo"].tolist()))
-                    st.session_state.insumos = st.session_state.insumos.reindex(columns=list(set(st.session_state.insumos.columns) | set(todas_cols)))
-                    st.session_state.insumos = pd.concat([st.session_state.insumos, pd.DataFrame([novo])], ignore_index=True)
+                        
+                    # Garante que as colunas do novo item estão no DF, se não estiverem
+                    st.session_state.insumos = garantir_colunas_extras(st.session_state.insumos, "Insumos")
+                    
+                    st.session_state.insumos = pd.concat([st.session_state.insumos, pd.DataFrame([novo])], ignore_index=True).reset_index(drop=True)
                     st.success(f"Insumo '{nome_insumo}' adicionado!")
                     st.rerun()
 
@@ -762,7 +973,8 @@ def papelaria_aba():
         if not st.session_state.insumos.empty:
             insumo_selecionado = st.selectbox(
                 "Selecione um insumo",
-                [""] + st.session_state.insumos["Nome"].astype(str).fillna("").tolist()
+                [""] + st.session_state.insumos["Nome"].astype(str).fillna("").tolist(),
+                key="insumo_escolhido_edit_del"
             )
         else:
             insumo_selecionado = None
@@ -785,14 +997,15 @@ def papelaria_aba():
                     st.rerun()
 
             if acao_insumo == "Editar" and idx is not None:
-                atual = st.session_state.insumos.loc[idx]
+                atual = st.session_state.insumos.loc[idx].fillna("")
                 with st.form(f"form_edit_insumo_{idx}"):
-                    novo_nome = st.text_input("Nome do Insumo", value=str(atual.get("Nome","")))
-                    nova_categoria = st.text_input("Categoria", value=str(atual.get("Categoria","")))
-                    nova_unidade = st.text_input("Unidade de Medida (ex: un, kg, m)", value=str(atual.get("Unidade","")))
+                    novo_nome = st.text_input("Nome do Insumo", value=str(atual.get("Nome","")), key=f"edit_insumo_nome_{idx}")
+                    nova_categoria = st.text_input("Categoria", value=str(atual.get("Categoria","")), key=f"edit_insumo_categoria_{idx}")
+                    nova_unidade = st.text_input("Unidade de Medida (ex: un, kg, m)", value=str(atual.get("Unidade","")), key=f"edit_insumo_unidade_{idx}")
                     novo_preco = st.number_input(
                         "Preço Unitário (R$)", min_value=0.0, format="%.2f",
-                        value=float(atual.get("Preço Unitário (R$)", 0.0))
+                        value=float(atual.get("Preço Unitário (R$)", 0.0)),
+                        key=f"edit_insumo_preco_{idx}"
                     )
 
                     valores_extras_edit = {}
@@ -826,24 +1039,25 @@ def papelaria_aba():
     # Aba Produtos
     # =====================================
     with aba_produtos:
-        st.header("Produtos") # Mantido o header aqui para não quebrar o layout, mas é o que causa o título duplicado
+        st.header("Produtos")
 
         with st.form("form_add_produto"):
             st.subheader("Adicionar novo produto")
-            nome_produto = st.text_input("Nome do Produto")
+            nome_produto = st.text_input("Nome do Produto", key="novo_produto_nome")
 
             if 'Nome' in st.session_state.insumos.columns:
                 insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
             else:
                 insumos_disponiveis = []
 
-            insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis)
+            insumos_selecionados = st.multiselect("Selecione os insumos usados", insumos_disponiveis, key="novo_produto_insumos_selecionados")
 
             insumos_usados = []
             custo_total = 0.0
 
             for insumo in insumos_selecionados:
-                dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
+                # Usa .loc[] para garantir que o acesso ao DataFrame não gere cópia desnecessária
+                dados_insumo = st.session_state.insumos.loc[st.session_state.insumos["Nome"] == insumo].iloc[0]
                 preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
                 unidade = str(dados_insumo.get("Unidade", ""))
 
@@ -867,7 +1081,7 @@ def papelaria_aba():
 
             st.markdown(f"**Custo Total Calculado (Insumos): R$ {custo_total:,.2f}**")
 
-            margem = st.number_input("Margem de Lucro (%)", min_value=0.0, format="%.2f", value=30.0)
+            margem = st.number_input("Margem de Lucro (%)", min_value=0.0, format="%.2f", value=30.0, key="novo_produto_margem")
 
             preco_vista = custo_total * (1 + margem / 100) if custo_total > 0 else 0.0
             preco_cartao = preco_vista / 0.8872 if preco_vista > 0 else 0.0
@@ -905,13 +1119,13 @@ def papelaria_aba():
                         "Insumos Usados": str(insumos_usados)
                     }
                     for k, v in valores_extras_prod.items():
+                        # Garante que os valores extras sejam incluídos
                         novo[k] = v
 
-                    # 🔔 Envio da mensagem para o Telegram
+                    # 🔔 Envio da mensagem para o Telegram (mantido)
                     try:
-                        # CORREÇÃO: Usa HARDCODED_TELEGRAM_TOKEN como fallback
                         TELEGRAM_TOKEN_SECRET = st.secrets.get("telegram_token", HARDCODED_TELEGRAM_TOKEN)
-                        TELEGRAM_CHAT_ID_PROD = "-1003030758192"
+                        TELEGRAM_CHAT_ID_PROD = TELEGRAM_CHAT_ID # Usando o mesmo chat ID global
                         THREAD_ID_PROD = 43
 
                         mensagem = f"<b>📦 Novo Produto Cadastrado:</b>\n"
@@ -938,22 +1152,22 @@ def papelaria_aba():
                         }
 
                         response = requests.post(telegram_url, json=payload)
-                        if response.status_code == 200:
-                            st.success("✅ Mensagem enviada para o Telegram!")
-                        else:
+                        if response.status_code != 200:
                             st.warning(f"⚠️ Erro ao enviar para Telegram: {response.text}")
+                        else:
+                             st.success("✅ Mensagem enviada para o Telegram!")
+
                     except Exception as e:
                         st.warning(f"⚠️ Falha ao tentar enviar para o Telegram: {e}")
 
                     # 🗃️ Salva no DataFrame local
-                    todas_cols = list(dict.fromkeys(PRODUTOS_BASE_COLS_GLOBAL + ["Insumos Usados"] + extras_produtos["Campo"].tolist()))
-                    st.session_state.produtos = st.session_state.produtos.reindex(
-                        columns=list(set(st.session_state.produtos.columns) | set(todas_cols))
-                    )
+                    # Garante a presença de todas as colunas
+                    st.session_state.produtos = garantir_colunas_extras(st.session_state.produtos, "Produtos")
+                    
                     st.session_state.produtos = pd.concat(
                         [st.session_state.produtos, pd.DataFrame([novo])],
                         ignore_index=True
-                    )
+                    ).reset_index(drop=True)
                     st.success(f"Produto '{nome_produto}' adicionado!")
                     st.rerun()
 
@@ -964,7 +1178,8 @@ def papelaria_aba():
         if not st.session_state.produtos.empty:
             produto_selecionado = st.selectbox(
                 "Selecione um produto",
-                [""] + st.session_state.produtos["Produto"].astype(str).fillna("").tolist()
+                [""] + st.session_state.produtos["Produto"].astype(str).fillna("").tolist(),
+                key="produto_escolhido_edit_del"
             )
         else:
             produto_selecionado = None
@@ -987,10 +1202,10 @@ def papelaria_aba():
                     st.rerun()
 
             if acao_produto == "Editar" and idx_p is not None:
-                atual_p = st.session_state.produtos.loc[idx_p]
+                atual_p = st.session_state.produtos.loc[idx_p].fillna("")
                 with st.form(f"form_edit_produto_{idx_p}"):
-                    novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")))
-                    nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)))
+                    novo_nome = st.text_input("Nome do Produto", value=str(atual_p.get("Produto","")), key=f"edit_produto_nome_{idx_p}")
+                    nova_margem = st.number_input("Margem (%)", min_value=0.0, format="%.2f", value=float(atual_p.get("Margem (%)", 0.0)), key=f"edit_produto_margem_{idx_p}")
 
                     try:
                         insumos_atual = ast.literal_eval(atual_p.get("Insumos Usados", "[]"))
@@ -1001,13 +1216,14 @@ def papelaria_aba():
 
                     insumos_disponiveis = st.session_state.insumos["Nome"].dropna().unique().tolist()
                     nomes_pre_selecionados = [i["Insumo"] for i in insumos_atual]
-                    insumos_editados = st.multiselect("Selecione os insumos usados", insumos_disponiveis, default=nomes_pre_selecionados)
+                    insumos_editados = st.multiselect("Selecione os insumos usados", insumos_disponiveis, default=nomes_pre_selecionados, key=f"edit_produto_insumos_selecionados_{idx_p}")
 
                     insumos_usados_edit = []
                     novo_custo = 0.0
 
                     for insumo in insumos_editados:
-                        dados_insumo = st.session_state.insumos[st.session_state.insumos["Nome"] == insumo].iloc[0]
+                        # Usa .loc[] para garantir que o acesso ao DataFrame não gere cópia desnecessária
+                        dados_insumo = st.session_state.insumos.loc[st.session_state.insumos["Nome"] == insumo].iloc[0]
                         preco_unit = float(dados_insumo.get("Preço Unitário (R$)", 0.0))
                         unidade = str(dados_insumo.get("Unidade", ""))
 
@@ -1072,7 +1288,7 @@ def papelaria_aba():
 
         # botão de exportação CSV fora dos forms
         if not st.session_state.produtos.empty:
-            baixar_csv_aba(st.session_state.produtos, "produtos_papelaria.csv", key_suffix="produtos") # CORREÇÃO APLICADA AQUI
+            baixar_csv_aba(st.session_state.produtos, "produtos_papelaria.csv", key_suffix="produtos")
             
 # FIM DA FUNÇÃO papelaria_aba()
 
