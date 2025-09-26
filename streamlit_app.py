@@ -93,6 +93,10 @@ def salvar_dados_no_github(df, commit_message=COMMIT_MESSAGE):
 # ==================== INTERFACE STREAMLIT ====================
 st.title("📘 Livro Caixa - Streamlit + GitHub")
 
+# Usando st.session_state para gerenciar o DataFrame
+if "df" not in st.session_state:
+    st.session_state.df = carregar_dados_do_github()
+
 # --- Formulário de Nova Movimentação na barra lateral ---
 st.sidebar.header("Nova Movimentação")
 with st.sidebar.form("form_movimentacao"):
@@ -104,8 +108,6 @@ with st.sidebar.form("form_movimentacao"):
     enviar = st.form_submit_button("Adicionar Movimentação")
 
 # --- Lógica principal ---
-df = carregar_dados_do_github()
-
 if enviar:
     if not cliente or valor <= 0:
         st.sidebar.warning("Por favor, preencha o nome do cliente e o valor corretamente.")
@@ -117,11 +119,11 @@ if enviar:
             "Forma de Pagamento": forma_pagamento,
             "Tipo": tipo
         }
-        df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
+        st.session_state.df = pd.concat([st.session_state.df, pd.DataFrame([nova_linha])], ignore_index=True)
 
 # --- Botão para Salvar no GitHub ---
 if st.button("Salvar no GitHub"):
-    if salvar_dados_no_github(df, COMMIT_MESSAGE):
+    if salvar_dados_no_github(st.session_state.df, COMMIT_MESSAGE):
         st.cache_data.clear()
         st.rerun()
     else:
@@ -129,10 +131,10 @@ if st.button("Salvar no GitHub"):
 
 # --- Exibição e Análises dos Dados ---
 st.subheader("📊 Movimentações Registradas")
-if df.empty:
+if st.session_state.df.empty:
     st.info("Nenhuma movimentação registrada ainda.")
 else:
-    df_exibicao = df.copy()
+    df_exibicao = st.session_state.df.copy()
     df_exibicao = df_exibicao.sort_values(by="Data", ascending=False)
     st.dataframe(df_exibicao, use_container_width=True)
 
@@ -140,7 +142,7 @@ else:
     st.markdown("### 🗑️ Excluir Movimentações")
     opcoes_exclusao = {
         f"ID: {row.name} - Data: {row['Data'].strftime('%d/%m/%Y') if pd.notnull(row['Data']) else 'Data inválida'} - {row['Cliente']} - R$ {row['Valor']:,.2f}": row.name
-        for _, row in df.iterrows()
+        for _, row in st.session_state.df.iterrows()
     }
     movimentacoes_a_excluir_str = st.multiselect(
         "Selecione as movimentações que deseja excluir:",
@@ -150,7 +152,7 @@ else:
 
     if st.button("Excluir Selecionadas"):
         if indices_a_excluir:
-            df = df.drop(indices_a_excluir)
+            st.session_state.df = st.session_state.df.drop(indices_a_excluir)
             st.warning("Movimentações excluídas. Clique em 'Salvar no GitHub' para confirmar.")
         else:
             st.warning("Selecione pelo menos uma movimentação para excluir.")
