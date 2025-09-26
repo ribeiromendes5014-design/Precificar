@@ -271,7 +271,33 @@ def _opcoes_para_lista(opcoes_str):
 
 def hash_df(df):
     """Gera um hash para o DataFrame para detecção de mudanças."""
-    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+    # Filtra colunas que não são hashable ou que não devem causar um re-hash
+    df_hashable = df.select_dtypes(exclude=['object', 'bytes']) 
+    # Inclui colunas string essenciais
+    for col in df.columns:
+        if df[col].dtype == 'object' and col not in df_hashable.columns:
+             df_hashable[col] = df[col]
+             
+    return hashlib.md5(pd.util.hash_pandas_object(df_hashable, index=False).values).hexdigest()
+
+def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="Atualização via app"):
+    """Salva o DataFrame como CSV no GitHub via API."""
+    from requests import get, put
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    conteudo = dataframe.to_csv(index=False)
+    conteudo_b64 = base64.b64encode(conteudo.encode()).decode()
+    headers = {"Authorization": f"token {token}"}
+    r = get(url, headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+    payload = {"message": mensagem, "content": conteudo_b64, "branch": branch}
+    if sha: payload["sha"] = sha
+    r2 = put(url, headers=headers, json=payload)
+    if r2.status_code in (200, 201):
+        # st.success(f"✅ Arquivo `{path}` atualizado no GitHub!")
+        pass # Mensagem de sucesso silenciosa para evitar ruído
+    else:
+        st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
+
 
 # Definições de colunas base
 INSUMOS_BASE_COLS_GLOBAL = ["Nome", "Categoria", "Unidade", "Preço Unitário (R$)"]
@@ -318,24 +344,6 @@ def render_input_por_tipo(label, tipo, opcoes, valor_padrao=None, key=None):
     else:
         return st.text_input(label, value=str(valor_padrao) if valor_padrao is not None else "", key=key)
 
-def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="Atualização via app"):
-    """Salva o DataFrame como CSV no GitHub via API."""
-    from requests import get, put
-    url = f"https://api.github.com/repos/{repo}/contents/{path}"
-    conteudo = dataframe.to_csv(index=False)
-    conteudo_b64 = base64.b64encode(conteudo.encode()).decode()
-    headers = {"Authorization": f"token {token}"}
-    r = get(url, headers=headers)
-    sha = r.json().get("sha") if r.status_code == 200 else None
-    payload = {"message": mensagem, "content": conteudo_b64, "branch": branch}
-    if sha: payload["sha"] = sha
-    r2 = put(url, headers=headers, json=payload)
-    if r2.status_code in (200, 201):
-        # st.success(f"✅ Arquivo `{path}` atualizado no GitHub!")
-        pass # Mensagem de sucesso silenciosa para evitar ruído
-    else:
-        st.error(f"❌ Erro ao salvar `{path}`: {r2.text}")
-
 
 # ==============================================================================
 # FUNÇÃO DA PÁGINA: PRECIFICAÇÃO COMPLETA
@@ -343,6 +351,14 @@ def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="
 
 def precificacao_completa():
     st.title("📊 Precificador de Produtos")
+    
+    # --- Configurações do GitHub para SALVAR ---
+    GITHUB_TOKEN = st.secrets.get("github_token", "TOKEN_FICTICIO")
+    GITHUB_REPO = "ribeiromendes5014-design/Precificar"
+    GITHUB_BRANCH = "main"
+    PATH_PRECFICACAO = "precificacao.csv"
+    ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/" + PATH_PRECFICACAO
+    imagens_dict = {}
     
     # ----------------------------------------------------
     # Inicialização e Configurações
@@ -367,6 +383,7 @@ def precificacao_completa():
         st.session_state.produtos_manuais["Custos Extras Produto"] = 0.0
         st.session_state.produtos_manuais["Imagem"] = None
 
+
     if "frete_manual" not in st.session_state:
         st.session_state["frete_manual"] = 0.0
     if "extras_manual" not in st.session_state:
@@ -381,8 +398,31 @@ def precificacao_completa():
     modo_margem = st.session_state.get("modo_margem", "Margem fixa")
     margem_fixa = st.session_state.get("margem_fixa", 30.0)
     
-    ARQ_CAIXAS = "https://raw.githubusercontent.com/ribeiromendes5014-design/Precificar/main/precificacao.csv"
-    imagens_dict = {}
+    
+    # ----------------------------------------------------
+    # Lógica de Salvamento Automático (Adicionado para corrigir o problema do usuário)
+    # ----------------------------------------------------
+    
+    # Prepara o DataFrame para salvar: remove a coluna 'Imagem' que contém bytes
+    df_to_hash = st.session_state.produtos_manuais.drop(columns=["Imagem"], errors='ignore')
+
+    # 1. Inicializa o hash para o estado da precificação
+    if "hash_precificacao" not in st.session_state:
+        st.session_state.hash_precificacao = hash_df(df_to_hash)
+
+    # 2. Verifica se houve alteração nos produtos manuais para salvar automaticamente
+    novo_hash = hash_df(df_to_hash)
+    if novo_hash != st.session_state.hash_precificacao:
+        salvar_csv_no_github(
+            GITHUB_TOKEN,
+            GITHUB_REPO,
+            PATH_PRECFICACAO,
+            df_to_hash, # Salva o df sem a coluna 'Imagem'
+            GITHUB_BRANCH,
+            mensagem="♻️ Alteração automática na precificação"
+        )
+        st.session_state.hash_precificacao = novo_hash
+
 
     # ----------------------------------------------------
     # Tabela Geral (com Edição e Exclusão)
@@ -1261,7 +1301,7 @@ def papelaria_aba():
                         st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-                        st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
+                        st.session_state.produtos.loc[idx_p, "Margem (%)] = float(nova_margem)
                         st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
                         for k, v in valores_extras_edit_p.items():
                             st.session_state.produtos.loc[idx_p, k] = v
