@@ -270,15 +270,30 @@ def _opcoes_para_lista(opcoes_str):
     return [o.strip() for o in str(opcoes_str).split(",") if o.strip()]
 
 def hash_df(df):
-    """Gera um hash para o DataFrame para detecção de mudanças."""
-    # Filtra colunas que não são hashable ou que não devem causar um re-hash
-    df_hashable = df.select_dtypes(exclude=['object', 'bytes']) 
-    # Inclui colunas string essenciais
-    for col in df.columns:
-        if df[col].dtype == 'object' and col not in df_hashable.columns:
-             df_hashable[col] = df[col]
+    """
+    Gera um hash para o DataFrame para detecção de mudanças.
+    Usa um método mais robusto que evita problemas com dtypes específicos do pandas.
+    """
+    # Cria uma cópia para evitar SettingWithCopyWarning e garante que não há colunas de bytes,
+    # que devem ser removidas ANTES de chamar esta função (o que já está sendo feito no precificacao_completa).
+    df_temp = df.copy() 
+    
+    # Converte colunas 'object' para string explícita para garantir hash consistente, se necessário,
+    # mas o pd.util.hash_pandas_object deve lidar bem com 'object' por padrão.
+    # O foco aqui é garantir que todos os dados estejam em formatos que o hash consiga processar.
+    
+    try:
+        return hashlib.md5(pd.util.hash_pandas_object(df_temp, index=False).values).hexdigest()
+    except Exception as e:
+        # Se houver erro, tenta converter colunas object para string
+        for col in df_temp.select_dtypes(include=['object']).columns:
+             df_temp[col] = df_temp[col].astype(str)
+        try:
+             return hashlib.md5(pd.util.hash_pandas_object(df_temp, index=False).values).hexdigest()
+        except Exception as inner_e:
+             st.error(f"Erro interno no hash do DataFrame: {inner_e}")
+             return "error" # Retorna um valor fixo em caso de falha grave
              
-    return hashlib.md5(pd.util.hash_pandas_object(df_hashable, index=False).values).hexdigest()
 
 def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="Atualização via app"):
     """Salva o DataFrame como CSV no GitHub via API."""
@@ -400,7 +415,7 @@ def precificacao_completa():
     
     
     # ----------------------------------------------------
-    # Lógica de Salvamento Automático (Adicionado para corrigir o problema do usuário)
+    # Lógica de Salvamento Automático
     # ----------------------------------------------------
     
     # Prepara o DataFrame para salvar: remove a coluna 'Imagem' que contém bytes
@@ -413,15 +428,16 @@ def precificacao_completa():
     # 2. Verifica se houve alteração nos produtos manuais para salvar automaticamente
     novo_hash = hash_df(df_to_hash)
     if novo_hash != st.session_state.hash_precificacao:
-        salvar_csv_no_github(
-            GITHUB_TOKEN,
-            GITHUB_REPO,
-            PATH_PRECFICACAO,
-            df_to_hash, # Salva o df sem a coluna 'Imagem'
-            GITHUB_BRANCH,
-            mensagem="♻️ Alteração automática na precificação"
-        )
-        st.session_state.hash_precificacao = novo_hash
+        if novo_hash != "error": # Evita salvar se a função hash falhou
+            salvar_csv_no_github(
+                GITHUB_TOKEN,
+                GITHUB_REPO,
+                PATH_PRECFICACAO,
+                df_to_hash, # Salva o df sem a coluna 'Imagem'
+                GITHUB_BRANCH,
+                mensagem="♻️ Alteração automática na precificação"
+            )
+            st.session_state.hash_precificacao = novo_hash
 
 
     # ----------------------------------------------------
@@ -801,15 +817,16 @@ def papelaria_aba():
 
     novo_hash = hash_df(st.session_state.produtos)
     if novo_hash != st.session_state.hash_produtos:
-        salvar_csv_no_github(
-            GITHUB_TOKEN,
-            GITHUB_REPO,
-            "produtos_papelaria.csv",
-            st.session_state.produtos,
-            GITHUB_BRANCH,
-            mensagem="♻️ Alteração automática nos produtos"
-        )
-        st.session_state.hash_produtos = novo_hash
+        if novo_hash != "error": # Evita salvar se a função hash falhou
+            salvar_csv_no_github(
+                GITHUB_TOKEN,
+                GITHUB_REPO,
+                "produtos_papelaria.csv",
+                st.session_state.produtos,
+                GITHUB_BRANCH,
+                mensagem="♻️ Alteração automática nos produtos"
+            )
+            st.session_state.hash_produtos = novo_hash
 
     # Criação das abas
     aba_campos, aba_insumos, aba_produtos = st.tabs(["Campos (Colunas)", "Insumos", "Produtos"])
@@ -1301,7 +1318,7 @@ def papelaria_aba():
                         st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-                        st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem) # CORREÇÃO: Colchete fechado estava faltando
+                        st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
                         st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
                         for k, v in valores_extras_edit_p.items():
                             st.session_state.produtos.loc[idx_p, k] = v
