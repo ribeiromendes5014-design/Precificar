@@ -1361,7 +1361,8 @@ def papelaria_aba():
                         st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-                        st.session_state.produtos.loc[idx_p, "Margem (%)] = float(nova_margem)
+                        # LINHA CORRIGIDA ABAIXO
+                        st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
                         st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
                         for k, v in valores_extras_edit_p.items():
                             st.session_state.produtos.loc[idx_p, k] = v
