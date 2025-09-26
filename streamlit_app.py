@@ -234,7 +234,7 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 
                 # Exibe a soma dos custos extras específicos (se houver) e o rateio global por unidade
                 rateio_e_extras_display = custos_extras_prod + rateio_global_unitario
-                st.write(f"🛠 Rateio/Extras (Total/Un.): {formatar_brl(rateio_e_extras_display)}") # Exibição corrigida
+                st.write(f"🛠 Rateio/Extras (Total/Un.): {formatar_brl(rateio_e_extras_display, decimais=4)}") # Exibição com mais decimais para rateio
                 
                 if 'Custo Total Unitário' in df.columns:
                     st.write(f"💸 Custo Total/Un: **{formatar_brl(custo_total_unitario)}**")
@@ -260,7 +260,8 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
         # Garante que o DataFrame tem as colunas mínimas esperadas para evitar erros de índice/coluna
         return pd.DataFrame(columns=[
             "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
-            "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão"
+            "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
+            "Rateio Global Unitário"
         ])
 
     df = df.copy()
@@ -275,17 +276,14 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
             df[col] = 0.0
             
     # --- Cálculo do Rateio Global ---
+    # NOTA: O cálculo do rateio é sempre baseado nos totais para consistência.
     qtd_total = df["Qtd"].sum()
     rateio_unitario = 0.0
     if qtd_total > 0:
         rateio_unitario = (frete_total + custos_extras) / qtd_total
 
-    # A coluna 'Custos Extras Produto' agora será tratada como custos específicos do produto.
-    # O rateio global será adicionado no cálculo do Custo Total Unitário abaixo.
-
-    # Calcular o custo total por unidade
-    # O rateio_unitario calculado deve ser adicionado ao custo de cada produto.
-    df["Rateio Global Unitário"] = rateio_unitario # Cria a coluna para cálculo e exibição detalhada
+    # Salva o rateio global unitário na coluna que será persistida e usada no cálculo total
+    df["Rateio Global Unitário"] = rateio_unitario 
     
     # O Custo Total Unitário é a soma do Custo Unitário Base + Custos Específicos + Rateio Global.
     df["Custo Total Unitário"] = df["Custo Unitário"] + df["Custos Extras Produto"] + df["Rateio Global Unitário"]
@@ -306,7 +304,7 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     cols_to_keep = [
         "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
         "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
-        "Imagem", "Imagem_URL", "Rateio Global Unitário" # Adicionada Rateio Global Unitário
+        "Imagem", "Imagem_URL", "Rateio Global Unitário" 
     ]
     
     # Mantém apenas as colunas que existem no DF
@@ -470,6 +468,10 @@ def precificacao_completa():
     # Garante a coluna Imagem_URL para produtos existentes que possam ter sido carregados
     if "Imagem_URL" not in st.session_state.produtos_manuais.columns:
         st.session_state.produtos_manuais["Imagem_URL"] = ""
+        
+    # Inicializa o rateio global unitário que será usado na exibição e cálculo
+    if "rateio_global_unitario_atual" not in st.session_state:
+        st.session_state["rateio_global_unitario_atual"] = 0.0
 
     # Inicialização de df_produtos_geral com dados de exemplo (se necessário)
     if "df_produtos_geral" not in st.session_state or st.session_state.df_produtos_geral.empty:
@@ -505,8 +507,6 @@ def precificacao_completa():
     # Lógica de Salvamento Automático
     # ----------------------------------------------------
     
-    # --- NOVO: Usa df_produtos_geral para salvar, garantindo colunas de precificação ---
-    
     # 1. Cria uma cópia do DF geral e remove colunas não-CSV-serializáveis (Imagem)
     df_to_save = st.session_state.df_produtos_geral.drop(columns=["Imagem"], errors='ignore')
     
@@ -527,7 +527,6 @@ def precificacao_completa():
                 mensagem="♻️ Alteração automática na precificação"
             )
             st.session_state.hash_precificacao = novo_hash
-    # --- FIM NOVO ---
 
 
     # ----------------------------------------------------
@@ -577,16 +576,19 @@ def precificacao_completa():
             produto_nome = str(row.get('Produto'))
             
             # Encontra o índice correspondente no produtos_manuais
-            manual_idx = st.session_state.produtos_manuais[st.session_state.produtos_manuais['Produto'] == produto_nome].index
+            manual_idx_list = st.session_state.produtos_manuais[st.session_state.produtos_manuais['Produto'] == produto_nome].index.tolist()
             
-            if not manual_idx.empty:
-                manual_idx = manual_idx[0]
+            if manual_idx_list:
+                manual_idx = manual_idx_list[0]
                 
-                # O Custo Unitário (base) e a Margem são os campos que realmente importam para o recálculo
+                # Os campos de entrada (Qtd, Custo Unitário, Custos Extras Produto, Margem (%))
+                # são reescritos no DF manual para garantir que o próximo processamento use
+                # os dados editados pelo usuário.
                 st.session_state.produtos_manuais.loc[manual_idx, "Produto"] = produto_nome
                 st.session_state.produtos_manuais.loc[manual_idx, "Qtd"] = row.get("Qtd", 1)
                 st.session_state.produtos_manuais.loc[manual_idx, "Custo Unitário"] = row.get("Custo Unitário", 0.0)
                 st.session_state.produtos_manuais.loc[manual_idx, "Margem (%)"] = row.get("Margem (%)", margem_fixa)
+                # NOTA: O campo 'Custos Extras Produto' é um dado de ENTRADA no editor
                 st.session_state.produtos_manuais.loc[manual_idx, "Custos Extras Produto"] = row.get("Custos Extras Produto", 0.0)
 
 
@@ -653,9 +655,6 @@ def precificacao_completa():
             if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
                 df_exemplo = load_csv_github(ARQ_CAIXAS)
                 if not df_exemplo.empty:
-                    # Garantir que as colunas calculadas existam para que o processar_dataframe não se perca.
-                    # As colunas calculadas serão recriadas pela função processar_dataframe
-                    
                     # Filtra colunas que existem no df_exemplo para evitar erro, mas garantindo as de entrada
                     cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
                     df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
@@ -695,16 +694,19 @@ def precificacao_completa():
 
 
             if qtd_total_manual > 0:
-                rateio_calculado = (frete_total + custos_extras) / qtd_total_manual
+                rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
             else:
                 rateio_calculado = 0.0
+            
+            # --- ATUALIZA O RATEIO GLOBAL UNITÁRIO NO ESTADO DA SESSÃO ---
+            st.session_state["rateio_global_unitario_atual"] = round(rateio_calculado, 4)
+            # --- FIM ATUALIZAÇÃO ---
 
             st.session_state["rateio_manual"] = round(rateio_calculado, 4)
             st.markdown(f"💰 **Rateio Unitário Calculado:** {formatar_brl(rateio_calculado, decimais=4)}")
             
             if st.button("🔄 Aplicar Novo Rateio aos Produtos Existentes", key="aplicar_rateio_btn"):
-                # A re-aplicação do rateio exige que se use o df_produtos_manuais como base
-                # para garantir que todos os campos de input sejam recalculados.
+                # O processar_dataframe usará o frete_total e custos_extras atualizados.
                 st.session_state.df_produtos_geral = processar_dataframe(
                     st.session_state.produtos_manuais,
                     frete_total,
@@ -735,11 +737,12 @@ def precificacao_completa():
 
                 
             with col2:
-                # Informa o rateio atual e altera o input para aceitar apenas os custos ESPECÍFICOS.
-                rateio_manual_atual = st.session_state.get("rateio_manual", 0.0)
-                st.info(f"O Rateio Global por unidade será adicionado automaticamente ao custo total: {formatar_brl(rateio_manual_atual, decimais=4)}")
+                # Informa o rateio atual (fixo)
+                rateio_global_unitario = st.session_state.get("rateio_global_unitario_atual", 0.0)
+                st.info(f"O Rateio Global por unidade será adicionado automaticamente ao custo total: {formatar_brl(rateio_global_unitario, decimais=4)}")
                 
-                # O valor padrão é 0.0, pois o rateio global será adicionado pela função processar_dataframe.
+                # O valor padrão é 0.0, pois o rateio global é adicionado na função processar_dataframe.
+                # O usuário deve inserir aqui apenas custos ESPECÍFICOS.
                 custo_extra_produto = st.number_input(
                     # A label foi corrigida para indicar que o usuário deve inserir apenas custos específicos.
                     "💰 Custos Extras ESPECÍFICOS do Produto (R$)", min_value=0.0, step=0.01, value=0.0, key="input_custo_extra_manual"
@@ -753,9 +756,9 @@ def precificacao_completa():
                 imagem_file = st.file_uploader("🖼️ Foto do Produto (Upload - opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
 
 
-            # Custo total unitário aqui é APENAS para cálculo da margem e preço sugerido (pré-aplicação do rateio)
+            # Custo total unitário AQUI inclui o rateio global ATUAL para fins de preview de preço
             custo_total_unitario_pre_rateio = valor_pago + custo_extra_produto
-            custo_total_unitario_com_rateio = custo_total_unitario_pre_rateio + rateio_manual_atual
+            custo_total_unitario_com_rateio = custo_total_unitario_pre_rateio + rateio_global_unitario
 
 
             if preco_final_sugerido > 0:
@@ -790,14 +793,12 @@ def precificacao_completa():
                         elif imagem_url.strip():
                             url_salvar = imagem_url.strip()
 
-                        # Se houver upload, a URL salva deve ser vazia, e vice-versa.
-                        # O CSV irá persistir a Imagem_URL.
-
+                        # Salva na lista manual apenas os dados de ENTRADA do usuário
                         novo_produto_data = {
                             "Produto": [produto],
                             "Qtd": [quantidade],
                             "Custo Unitário": [valor_pago],
-                            "Custos Extras Produto": [custo_extra_produto], # Aqui salva apenas o custo específico
+                            "Custos Extras Produto": [custo_extra_produto], # Apenas o custo específico
                             "Margem (%)": [margem_manual],
                             "Imagem": [imagem_bytes],
                             "Imagem_URL": [url_salvar] # Salva a URL para persistência
@@ -880,14 +881,15 @@ def precificacao_completa():
         if st.button("🔄 Carregar CSV do GitHub (Tab GitHub)"):
             df_exemplo = load_csv_github(ARQ_CAIXAS)
             if not df_exemplo.empty:
-                # Garantir que as colunas calculadas existam para que o processar_dataframe não se perca.
-                # As colunas calculadas serão recriadas pela função processar_dataframe
+                # O rateio global unitário e outros campos calculados são descartados no carregamento, 
+                # pois serão recalculados abaixo. Apenas as colunas de ENTRADA importam.
                 
-                # Filtra colunas que existem no df_exemplo para evitar erro, mas garantindo as de entrada
                 cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+                
+                # Garante que só carrega colunas que existem no CSV e que são de ENTRADA
                 df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
                 
-                # Adiciona colunas ausentes se necessário para o DF manual
+                # Adiciona colunas ausentes se necessário para o DF manual (Dados de ENTRADA)
                 if "Custos Extras Produto" not in df_base_loaded.columns:
                     df_base_loaded["Custos Extras Produto"] = 0.0
                 if "Imagem" not in df_base_loaded.columns:
@@ -896,6 +898,8 @@ def precificacao_completa():
                     df_base_loaded["Imagem_URL"] = ""
 
                 st.session_state.produtos_manuais = df_base_loaded
+                
+                # Recalcula o DF geral a partir dos dados de entrada carregados
                 st.session_state.df_produtos_geral = processar_dataframe(
                     st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
                 )
