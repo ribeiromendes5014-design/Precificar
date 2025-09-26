@@ -519,6 +519,7 @@ def precificacao_completa():
         st.session_state["rateio_global_unitario_atual"] = 0.0
 
     # === Lógica de Carregamento AUTOMÁTICO do CSV do GitHub (Correção de Persistência) ===
+    # O carregamento automático ocorre APENAS na primeira vez que a sessão é iniciada
     if "produtos_manuais_loaded" not in st.session_state:
         df_loaded = load_csv_github(ARQ_CAIXAS)
         
@@ -1018,67 +1019,20 @@ def precificacao_completa():
 
 
     # ----------------------------------------------------
-    # Abas de Utilidade (Carregamento/PDF)
+    # Abas de Utilidade (Carregamento CSV)
     # ----------------------------------------------------
     
-    tab_util_pdf, tab_util_github = st.tabs([
-        "📄 Carregar PDF",
-        "📥 Carregar CSV do GitHub"
+    tab_util_github = st.tabs([
+        "🛠️ Utilitários"
     ])
 
-    # === Tab PDF ===
-    with tab_util_pdf:
-        st.markdown("---")
-        pdf_file = st.file_uploader("📤 Selecione o PDF da nota fiscal ou lista de compras", type=["pdf"])
-        if pdf_file:
-            try:
-                produtos_pdf = extrair_produtos_pdf(pdf_file)
-                if not produtos_pdf:
-                    st.warning("⚠️ Nenhum produto encontrado no PDF. Use o CSV de exemplo abaixo.")
-                else:
-                    df_pdf = pd.DataFrame(produtos_pdf)
-                    df_pdf["Custos Extras Produto"] = 0.0
-                    df_pdf["Imagem"] = None
-                    df_pdf["Imagem_URL"] = "" # Inicializa nova coluna
-                    df_pdf["Cor"] = ""
-                    df_pdf["Marca"] = ""
-                    df_pdf["Data_Cadastro"] = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
-                    # Concatena os novos produtos ao manual
-                    st.session_state.produtos_manuais = pd.concat([st.session_state.produtos_manuais, df_pdf], ignore_index=True)
-                    st.session_state.df_produtos_geral = processar_dataframe(
-                        st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
-                    )
-                    st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro ao processar o PDF: {e}")
-        else:
-            st.info("📄 Faça upload de um arquivo PDF para começar.")
-            if st.button("📥 Carregar CSV de exemplo (PDF Tab)"):
-                df_exemplo = load_csv_github(ARQ_CAIXAS)
-                if not df_exemplo.empty:
-                    # Filtra colunas de ENTRADA
-                    cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL", "Cor", "Marca", "Data_Cadastro"]
-                    df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
-                    
-                    # Garante colunas ausentes
-                    if "Custos Extras Produto" not in df_base_loaded.columns: df_base_loaded["Custos Extras Produto"] = 0.0
-                    if "Imagem" not in df_base_loaded.columns: df_base_loaded["Imagem"] = None
-                    if "Imagem_URL" not in df_base_loaded.columns: df_base_loaded["Imagem_URL"] = ""
-                    if "Cor" not in df_base_loaded.columns: df_base_loaded["Cor"] = ""
-                    if "Marca" not in df_base_loaded.columns: df_base_loaded["Marca"] = ""
-                    if "Data_Cadastro" not in df_base_loaded.columns: df_base_loaded["Data_Cadastro"] = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
-
-
-                    st.session_state.produtos_manuais = df_base_loaded.copy()
-                    st.session_state.df_produtos_geral = processar_dataframe(
-                        st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
-                    )
-                    st.rerun()
-
     # === Tab GitHub ===
-    with tab_util_github:
+    with tab_util_github[0]:
         st.markdown("---")
         st.header("📥 Carregar CSV de Precificação do GitHub")
+        st.info("O CSV é carregado automaticamente ao iniciar, mas use este botão para forçar o recarregamento do seu arquivo persistido no GitHub.")
+
+        # Botão de Carregamento que puxa o CSV do GitHub
         if st.button("🔄 Carregar CSV do GitHub"):
             df_exemplo = load_csv_github(ARQ_CAIXAS)
             if not df_exemplo.empty:
@@ -1106,6 +1060,8 @@ def precificacao_completa():
                 st.success("✅ CSV carregado e processado com sucesso!")
                 # Força o rerun para re-aplicar os filtros de data no display
                 st.rerun()
+            else:
+                st.warning("⚠️ Não foi possível carregar o CSV do GitHub. Verifique as credenciais ou se o arquivo existe.")
 
 
 # ==============================================================================
