@@ -20,7 +20,7 @@ TOPICO_ID = 28 # ID do tópico (thread) no grupo Telegram
 
 
 def gerar_pdf(df: pd.DataFrame) -> BytesIO:
-    """Gera um PDF formatado a partir do DataFrame de precificação, incluindo a URL da imagem."""
+    """Gera um PDF formatado a partir do DataFrame de precificação, suportando texto longo com quebra de linha."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
@@ -28,22 +28,22 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf.ln(5)
 
     # Configurações de fonte para tabela
-    pdf.set_font("Arial", "B", 10) # Fonte menor para caber mais dados
+    pdf.set_font("Arial", "B", 12)
 
     # Definindo largura das colunas (em mm)
     col_widths = {
-        "Produto": 40,
+        "Produto": 50,
         "Qtd": 15,
-        "Custo Unitário": 25,
-        "Margem (%)": 20,
-        "Preço à Vista": 25,
-        "Preço no Cartão": 25,
-        "URL da Imagem": 40 # Nova coluna para a URL
+        "Custo Unitário": 35,
+        "Margem (%)": 25,
+        "Preço à Vista": 35,
+        "Preço no Cartão": 35
     }
     
     # Define as colunas a serem exibidas no PDF
     pdf_cols = [col for col in col_widths.keys() if col in df.columns or col == "Custo Unitário"]
     current_widths = [col_widths[col] for col in pdf_cols]
+    total_width = sum(current_widths) # Largura total da tabela
 
     # Cabeçalho da tabela
     for col_name, width in zip(pdf_cols, current_widths):
@@ -51,103 +51,124 @@ def gerar_pdf(df: pd.DataFrame) -> BytesIO:
     pdf.ln()
 
     # Fonte para corpo da tabela
-    pdf.set_font("Arial", "", 8) # Fonte ainda menor para caber a URL
+    pdf.set_font("Arial", "", 12)
+    line_height = 5 # Altura base para uma única linha de texto (meia altura)
+    min_row_height = 10 # Altura mínima da linha para alinhar com o cabeçalho
 
     if df.empty:
-        pdf.cell(sum(current_widths), 10, "Nenhum produto cadastrado.", border=1, align="C")
+        pdf.cell(total_width, min_row_height, "Nenhum produto cadastrado.", border=1, align="C")
         pdf.ln()
     else:
         # Itera pelas linhas e escreve na tabela
         for idx, row in df.iterrows():
-            if "Produto" in pdf_cols:
-                pdf.cell(col_widths["Produto"], 10, str(row.get("Produto", "")), border=1)
-            if "Qtd" in pdf_cols:
-                pdf.cell(col_widths["Qtd"], 10, str(row.get("Qtd", 0)), border=1, align="C")
-            if "Custo Unitário" in pdf_cols:
-                # Usa o Custo Total Unitário para o relatório, se disponível
-                custo_unit_val = row.get("Custo Total Unitário", row.get("Custo Unitário", 0.0))
-                pdf.cell(col_widths["Custo Unitário"], 10, f"R$ {custo_unit_val:.2f}", border=1, align="R")
-            if "Margem (%)" in pdf_cols:
-                pdf.cell(col_widths["Margem (%)"], 10, f"{row.get('Margem (%)', 0.0):.2f}%", border=1, align="R")
-            if "Preço à Vista" in pdf_cols:
-                pdf.cell(col_widths["Preço à Vista"], 10, f"R$ {row.get('Preço à Vista', 0.0):.2f}", border=1, align="R")
-            if "Preço no Cartão" in pdf_cols:
-                pdf.cell(col_widths["Preço no Cartão"], 10, f"R$ {row.get('Preço no Cartão', 0.0):.2f}", border=1, align="R")
             
-            # --- NOVO: URL da Imagem no PDF ---
-            if "URL da Imagem" in pdf_cols:
-                url_display = str(row.get("Imagem_URL", ""))
-                # Limita o tamanho da URL para não quebrar o layout
-                if len(url_display) > 35:
-                    url_display = url_display[:32] + "..."
-                pdf.cell(col_widths["URL da Imagem"], 10, url_display, border=1, align="L", link=str(row.get("Imagem_URL", "")))
-            # --- FIM NOVO ---
+            # --- 1. Calcular a Altura da Linha (baseado na coluna 'Produto') ---
+            start_y = pdf.get_y()
+            start_x = pdf.get_x()
+            product_text = str(row.get("Produto", ""))
+
+            # Simula a escrita do Produto com multi_cell (borda 0) para encontrar a altura
+            pdf.set_xy(start_x, start_y)
+            pdf.multi_cell(col_widths["Produto"], line_height, product_text, border=0, align='L') 
+            
+            # Altura total que a célula do produto ocupou
+            height_produto = pdf.get_y() - start_y
+            
+            # Garante a altura mínima
+            row_height = max(min_row_height, height_produto)
+            
+            # --- 2. Retornar e Desenhar a Linha (Bordas e Conteúdo) ---
+            
+            # Retorna o ponteiro Y para o início da linha
+            pdf.set_y(start_y)
+            pdf.set_x(start_x)
+            
+            # Desenha o retângulo da borda externa
+            pdf.rect(start_x, start_y, total_width, row_height)
+            
+            current_x = start_x
+            
+            # Colunas de dados para formatação e alinhamento
+            col_data_map = {
+                "Produto": ("Produto", 'L', ""), 
+                "Qtd": ("Qtd", 'C', "{:.0f}"),
+                "Custo Unitário": ("Custo Total Unitário", 'R', "R$ {:.2f}"),
+                "Margem (%)": ("Margem (%)", 'R', "{:.2f}%"),
+                "Preço à Vista": ("Preço à Vista", 'R', "R$ {:.2f}"),
+                "Preço no Cartão": ("Preço no Cartão", 'R', "R$ {:.2f}")
+            }
+
+            # Desenha todas as células
+            for col_name, width in zip(pdf_cols, current_widths):
                 
-            pdf.ln()
+                # Desenha a linha vertical direita (exceto a última coluna)
+                if current_x + width < start_x + total_width:
+                    pdf.line(current_x + width, start_y, current_x + width, start_y + row_height)
+
+                # Conteúdo da célula
+                pdf.set_xy(current_x, start_y)
+                
+                if col_name == "Produto":
+                    # Desenha o Produto com multi_cell (sem borda)
+                    pdf.multi_cell(width, line_height, product_text, border=0, align='L')
+                else:
+                    # Desenha as outras células com cell (texto alinhado ao centro verticalmente)
+                    row_key, align, fmt = col_data_map[col_name]
+                    
+                    val = row.get(row_key, row.get(col_name, 0.0))
+                    
+                    # Ajuste de valor para Custo Unitário
+                    if col_name == "Custo Unitário":
+                        val = row.get("Custo Total Unitário", row.get("Custo Unitário", 0.0))
+
+                    if pd.isna(val) or val is None:
+                        text = "-"
+                    else:
+                        try:
+                            if col_name == "Qtd":
+                                text = fmt.format(int(val))
+                            else:
+                                text = fmt.format(float(val))
+                        except (ValueError, TypeError):
+                            text = str(val)
+
+                    # Calcula padding superior para centralização vertical do texto (de 10mm)
+                    padding_y = (row_height - min_row_height) / 2 
+                    pdf.set_y(start_y + padding_y)
+                    
+                    # Desenha a célula com a altura de 10mm (min_row_height) para o texto
+                    pdf.cell(width, min_row_height, text, border=0, align=align)
+                
+                # Avança para a próxima coluna
+                current_x += width
+                
+            # --- 3. Finalizar a linha e avançar o ponteiro Y ---
+            
+            # Avança Y para o final da linha mais alta para começar a próxima linha
+            pdf.set_y(start_y + row_height) 
 
     pdf_bytes = pdf.output(dest='S').encode('latin1')
     return BytesIO(pdf_bytes)
 
 
-def enviar_pdf_telegram(pdf_bytesio, df_produtos: pd.DataFrame, thread_id=None):
-    """Envia o arquivo PDF e a primeira imagem (se existir) em mensagens separadas para o Telegram."""
-    
+def enviar_pdf_telegram(pdf_bytesio, thread_id=None):
+    """Envia o arquivo PDF para o Telegram."""
+    # Lê o token de forma segura do Streamlit Secrets, usando o hardcoded como fallback.
     token = st.secrets.get("telegram_token", HARDCODED_TELEGRAM_TOKEN)
     
-    image_url = None
-    image_caption = "Relatório de Precificação"
-    
-    if not df_produtos.empty and "Imagem_URL" in df_produtos.columns:
-        first_row = df_produtos.iloc[0]
-        url = first_row.get("Imagem_URL")
-        produto = first_row.get("Produto", "Produto")
-        
-        if isinstance(url, str) and url.startswith("http"):
-            image_url = url
-            image_caption = f"📦 Produto Principal: {produto}\n\n[Relatório de Precificação em anexo]"
-
-    # 1. Envia o PDF (mensagem principal)
-    
-    url_doc = f"https://api.telegram.org/bot{token}/sendDocument"
-    files_doc = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
-    data_doc = {"chat_id": TELEGRAM_CHAT_ID, "caption": image_caption if not image_url else "[Relatório de Precificação em anexo]"}
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    files = {'document': ('precificacao.pdf', pdf_bytesio, 'application/pdf')}
+    data = {"chat_id": TELEGRAM_CHAT_ID}
     if thread_id is not None:
-        data_doc["message_thread_id"] = thread_id
-    
-    resp_doc = requests.post(url_doc, data=data_doc, files=files_doc)
-    resp_doc_json = resp_doc.json()
-    
-    if not resp_doc_json.get("ok"):
-         st.error(f"❌ Erro ao enviar PDF: {resp_doc_json.get('description')}")
-         return
+        data["message_thread_id"] = thread_id
 
-    st.success("✅ PDF enviado para o Telegram.")
-    
-    # 2. Envia a foto (se existir) em uma mensagem separada
-    if image_url:
-        try:
-            url_photo = f"https://api.telegram.org/bot{token}/sendPhoto"
-            
-            # Faz o Telegram buscar a foto diretamente da URL
-            data_photo = {
-                "chat_id": TELEGRAM_CHAT_ID, 
-                "photo": image_url,
-                "caption": f"🖼️ Foto do Produto Principal: {produto}"
-            }
-            if thread_id is not None:
-                data_photo["message_thread_id"] = thread_id
+    response = requests.post(url, data=data, files=files)
+    resp_json = response.json()
+    if not resp_json.get("ok"):
+        st.error(f"Erro ao enviar PDF: {resp_json.get('description')}")
+    else:
+        st.success("✅ PDF enviado para o Telegram com sucesso!")
 
-            resp_photo = requests.post(url_photo, data=data_photo)
-            resp_photo_json = resp_photo.json()
-
-            if resp_photo_json.get("ok"):
-                st.success("✅ Foto do produto principal enviada com sucesso!")
-            else:
-                 st.warning(f"❌ Erro ao enviar a foto do produto: {resp_photo_json.get('description')}")
-                 
-        except Exception as e:
-            st.warning(f"⚠️ Erro ao tentar enviar a imagem. Erro: {e}")
-            
 
 def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
     """Exibe os resultados de precificação com tabela e imagens dos produtos."""
@@ -161,24 +182,15 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
         with st.container():
             cols = st.columns([1, 3])
             with cols[0]:
-                img_to_display = None
-                
-                # 1. Tenta carregar imagem do dicionário (upload manual)
-                img_to_display = imagens_dict.get(row.get("Produto"))
-
-                # 2. Tenta carregar imagem dos bytes (se persistido)
-                if img_to_display is None and row.get("Imagem") is not None and isinstance(row.get("Imagem"), bytes):
+                # Tenta exibir imagem dos produtos manuais (se estiverem nos dicionário de bytes)
+                img_bytes = imagens_dict.get(row.get("Produto"))
+                if img_bytes:
+                    st.image(img_bytes, width=100)
+                elif row.get("Imagem") is not None and isinstance(row.get("Imagem"), bytes):
                     try:
-                        img_to_display = row.get("Imagem")
+                        st.image(row.get("Imagem"), width=100)
                     except Exception:
-                        pass # Continua tentando a URL
-
-                # 3. Tenta carregar imagem da URL (se persistido)
-                img_url = row.get("Imagem_URL")
-                if img_to_display is None and img_url and isinstance(img_url, str) and img_url.startswith("http"):
-                    st.image(img_url, width=100, caption="URL")
-                elif img_to_display:
-                    st.image(img_to_display, width=100, caption="Arquivo")
+                        st.write("🖼️ N/A")
                 else:
                     st.write("🖼️ N/A")
                     
@@ -285,7 +297,7 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     cols_to_keep = [
         "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
         "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
-        "Imagem", "Imagem_URL" # Adicionada Imagem_URL para persistência no CSV
+        "Imagem"
     ]
     
     # Mantém apenas as colunas que existem no DF
@@ -443,26 +455,21 @@ def precificacao_completa():
     # Inicialização de variáveis de estado da Precificação
     if "produtos_manuais" not in st.session_state:
         st.session_state.produtos_manuais = pd.DataFrame(columns=[
-            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem", "Imagem_URL"
+            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem"
         ])
     
-    # Garante a coluna Imagem_URL para produtos existentes que possam ter sido carregados
-    if "Imagem_URL" not in st.session_state.produtos_manuais.columns:
-        st.session_state.produtos_manuais["Imagem_URL"] = ""
-
     # Inicialização de df_produtos_geral com dados de exemplo (se necessário)
     if "df_produtos_geral" not in st.session_state or st.session_state.df_produtos_geral.empty:
         exemplo_data = [
             {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
             {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
         ]
-        df_base = pd.DataFrame(exemplo_data)
-        df_base["Custos Extras Produto"] = 0.0
-        df_base["Imagem"] = None
-        df_base["Imagem_URL"] = ""
-
-        st.session_state.df_produtos_geral = processar_dataframe(df_base, 0.0, 0.0, "Margem fixa", 30.0)
-        st.session_state.produtos_manuais = df_base.copy()
+        st.session_state.df_produtos_geral = processar_dataframe(pd.DataFrame(exemplo_data), 0.0, 0.0, "Margem fixa", 30.0)
+        
+        # Inicializa o manual a partir do geral
+        st.session_state.produtos_manuais = pd.DataFrame(exemplo_data)
+        st.session_state.produtos_manuais["Custos Extras Produto"] = 0.0
+        st.session_state.produtos_manuais["Imagem"] = None
 
 
     if "frete_manual" not in st.session_state:
@@ -587,8 +594,7 @@ def precificacao_completa():
             st.warning("⚠️ Nenhum produto para gerar PDF.")
         else:
             pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
-            # Passa o DataFrame completo para a função de envio
-            enviar_pdf_telegram(pdf_io, st.session_state.df_produtos_geral, thread_id=TOPICO_ID)
+            enviar_pdf_telegram(pdf_io, thread_id=TOPICO_ID)
     
     st.markdown("---")
     
@@ -615,7 +621,6 @@ def precificacao_completa():
                     df_pdf = pd.DataFrame(produtos_pdf)
                     df_pdf["Custos Extras Produto"] = 0.0
                     df_pdf["Imagem"] = None
-                    df_pdf["Imagem_URL"] = "" # Inicializa nova coluna
                     # Concatena os novos produtos ao manual
                     st.session_state.produtos_manuais = pd.concat([st.session_state.produtos_manuais, df_pdf], ignore_index=True)
                     st.session_state.df_produtos_geral = processar_dataframe(
@@ -631,9 +636,6 @@ def precificacao_completa():
                 if not df_exemplo.empty:
                     df_exemplo["Custos Extras Produto"] = 0.0
                     df_exemplo["Imagem"] = None
-                    if "Imagem_URL" not in df_exemplo.columns:
-                        df_exemplo["Imagem_URL"] = ""
-
                     st.session_state.produtos_manuais = df_exemplo.copy()
                     st.session_state.df_produtos_geral = processar_dataframe(
                         df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
@@ -694,12 +696,7 @@ def precificacao_completa():
                 produto = st.text_input("📝 Nome do Produto", key="input_produto_manual")
                 quantidade = st.number_input("📦 Quantidade", min_value=1, step=1, key="input_quantidade_manual")
                 valor_pago = st.number_input("💰 Valor Pago (Custo Unitário Base R$)", min_value=0.0, step=0.01, key="input_valor_pago_manual")
-                
-                # --- Campo de URL da Imagem ---
-                imagem_url = st.text_input("🔗 URL da Imagem (opcional)", key="input_imagem_url_manual")
-                # --- FIM NOVO ---
-
-                
+                imagem_file = st.file_uploader("🖼️ Foto do Produto (opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
             with col2:
                 valor_default_rateio = st.session_state.get("rateio_manual", 0.0)
                 custo_extra_produto = st.number_input(
@@ -708,10 +705,6 @@ def precificacao_completa():
                 preco_final_sugerido = st.number_input(
                     "💸 Valor Final Sugerido (Preço à Vista) (R$)", min_value=0.0, step=0.01, key="input_preco_sugerido_manual"
                 )
-                
-                # Uploader de arquivo (mantido como alternativa)
-                imagem_file = st.file_uploader("🖼️ Foto do Produto (Upload - opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
-
 
             custo_total_unitario = valor_pago + custo_extra_produto
 
@@ -736,19 +729,9 @@ def precificacao_completa():
                 if adicionar_produto:
                     if produto and quantidade > 0 and valor_pago >= 0:
                         imagem_bytes = None
-                        url_salvar = ""
-
-                        # Prioriza o arquivo uploaded, se existir
                         if imagem_file is not None:
                             imagem_bytes = imagem_file.read()
-                            imagens_dict[produto] = imagem_bytes # Guarda para exibição na sessão
-                        
-                        # Se não houver upload, usa a URL
-                        elif imagem_url.strip():
-                            url_salvar = imagem_url.strip()
-
-                        # Se houver upload, a URL salva deve ser vazia, e vice-versa.
-                        # O CSV irá persistir a Imagem_URL.
+                            imagens_dict[produto] = imagem_bytes
 
                         novo_produto_data = {
                             "Produto": [produto],
@@ -756,8 +739,7 @@ def precificacao_completa():
                             "Custo Unitário": [valor_pago],
                             "Custos Extras Produto": [custo_extra_produto],
                             "Margem (%)": [margem_manual],
-                            "Imagem": [imagem_bytes],
-                            "Imagem_URL": [url_salvar] # Salva a URL para persistência
+                            "Imagem": [imagem_bytes]
                         }
                         novo_produto = pd.DataFrame(novo_produto_data)
 
@@ -839,11 +821,6 @@ def precificacao_completa():
             if not df_exemplo.empty:
                 df_exemplo["Custos Extras Produto"] = 0.0
                 df_exemplo["Imagem"] = None
-                
-                # Garante a nova coluna ao carregar
-                if "Imagem_URL" not in df_exemplo.columns:
-                    df_exemplo["Imagem_URL"] = ""
-
                 st.session_state.produtos_manuais = df_exemplo.copy()
                 st.session_state.df_produtos_geral = processar_dataframe(
                     df_exemplo, frete_total, custos_extras, modo_margem, margem_fixa
@@ -1414,7 +1391,6 @@ def papelaria_aba():
                         st.session_state.produtos.loc[idx_p, "Custo Total"] = float(novo_custo)
                         st.session_state.produtos.loc[idx_p, "Preço à Vista"] = float(novo_vista)
                         st.session_state.produtos.loc[idx_p, "Preço no Cartão"] = float(novo_cartao)
-                        # LINHA CORRIGIDA ABAIXO
                         st.session_state.produtos.loc[idx_p, "Margem (%)"] = float(nova_margem)
                         st.session_state.produtos.loc[idx_p, "Insumos Usados"] = str(insumos_usados_edit)
                         for k, v in valores_extras_edit_p.items():
