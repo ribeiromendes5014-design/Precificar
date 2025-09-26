@@ -6,7 +6,7 @@ from io import BytesIO, StringIO
 import base64
 import hashlib
 import ast
-
+from datetime import datetime
 
 # ===============================
 # FUNÇÕES AUXILIARES GLOBAIS
@@ -141,7 +141,18 @@ def enviar_pdf_telegram(pdf_bytesio, df_produtos: pd.DataFrame, thread_id=None):
         
         if isinstance(url, str) and url.startswith("http"):
             image_url = url
-            image_caption = f"📦 Produto Principal: {produto}\n\n[Relatório de Precificação em anexo]"
+            # Adiciona informações de filtro ao caption, se aplicável
+            date_info = ""
+            if "Data_Cadastro" in df_produtos.columns:
+                min_date = pd.to_datetime(df_produtos['Data_Cadastro']).min().strftime('%d/%m/%Y')
+                max_date = pd.to_datetime(df_produtos['Data_Cadastro']).max().strftime('%d/%m/%Y')
+                if min_date == max_date:
+                    date_info = f"\n🗓️ Cadastro em: {min_date}"
+                else:
+                    date_info = f"\n🗓️ Período: {min_date} a {max_date}"
+
+            image_caption = f"📦 Produto Principal: {produto}{date_info}\n\n[Relatório de Precificação em anexo]"
+
 
     # 1. Envia o PDF (mensagem principal)
     
@@ -223,6 +234,19 @@ def exibir_resultados(df: pd.DataFrame, imagens_dict: dict):
                 st.markdown(f"**{row.get('Produto', '—')}**")
                 st.write(f"📦 Quantidade: {row.get('Qtd', '—')}")
                 
+                # Exibição dos novos campos, se existirem
+                cor = row.get('Cor', 'N/A')
+                marca = row.get('Marca', 'N/A')
+                data_cadastro = row.get('Data_Cadastro', 'N/A')
+                if data_cadastro != 'N/A':
+                    try:
+                        # Formata a data para dd/mm/yyyy para exibição
+                        data_cadastro = pd.to_datetime(data_cadastro).strftime('%d/%m/%Y')
+                    except Exception:
+                        pass # Mantém o valor original se a formatação falhar
+
+                st.write(f"🎨 Cor: {cor} | 🏭 Marca: {marca} | 📅 Cadastro: {data_cadastro}")
+
                 custo_base = row.get('Custo Unitário', 0.0)
                 custo_total_unitario = row.get('Custo Total Unitário', custo_base)
 
@@ -262,7 +286,7 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
         return pd.DataFrame(columns=[
             "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
             "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
-            "Rateio Global Unitário"
+            "Rateio Global Unitário", "Cor", "Marca", "Data_Cadastro" # ADDED NEW COLUMNS
         ])
 
     df = df.copy()
@@ -275,7 +299,12 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
         elif col not in df.columns:
             # Adiciona colunas ausentes com valor 0.0 se for necessário para o cálculo
             df[col] = 0.0
-            
+    
+    # Garante as novas colunas de texto/data
+    for col in ["Cor", "Marca", "Data_Cadastro"]:
+         if col not in df.columns:
+            df[col] = "" # Inicializa como string vazia
+
     # --- Cálculo do Rateio Global ---
     # NOTA: O cálculo do rateio é sempre baseado nos totais para consistência.
     qtd_total = df["Qtd"].sum()
@@ -305,7 +334,8 @@ def processar_dataframe(df: pd.DataFrame, frete_total: float, custos_extras: flo
     cols_to_keep = [
         "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
         "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão", 
-        "Imagem", "Imagem_URL", "Rateio Global Unitário" 
+        "Imagem", "Imagem_URL", "Rateio Global Unitário", 
+        "Cor", "Marca", "Data_Cadastro" # ADDED NEW COLUMNS
     ]
     
     # Mantém apenas as colunas que existem no DF
@@ -322,7 +352,7 @@ def load_csv_github(url: str) -> pd.DataFrame:
         df = pd.read_csv(StringIO(response.text))
         return df
     except Exception as e:
-        st.error(f"Erro ao carregar CSV do GitHub: {e}")
+        # st.error(f"Erro ao carregar CSV do GitHub: {e}") # Silencioso na inicialização
         return pd.DataFrame()
 
 
@@ -380,6 +410,7 @@ def salvar_csv_no_github(token, repo, path, dataframe, branch="main", mensagem="
     """Salva o DataFrame como CSV no GitHub via API."""
     from requests import get, put
     url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    # O DF de entrada já deve estar sem colunas de bytes (ex: 'Imagem')
     conteudo = dataframe.to_csv(index=False)
     conteudo_b64 = base64.b64encode(conteudo.encode()).decode()
     headers = {"Authorization": f"token {token}"}
@@ -463,7 +494,8 @@ def precificacao_completa():
     # Inicialização de variáveis de estado da Precificação
     if "produtos_manuais" not in st.session_state:
         st.session_state.produtos_manuais = pd.DataFrame(columns=[
-            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem", "Imagem_URL"
+            "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", "Margem (%)", "Imagem", "Imagem_URL",
+            "Cor", "Marca", "Data_Cadastro" # NOVAS COLUNAS
         ])
     
     # Garante a coluna Imagem_URL para produtos existentes que possam ter sido carregados
@@ -479,22 +511,28 @@ def precificacao_completa():
         df_loaded = load_csv_github(ARQ_CAIXAS)
         
         # Define as colunas de ENTRADA (apenas dados brutos)
-        cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+        cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL", "Cor", "Marca", "Data_Cadastro"]
         df_base_loaded = df_loaded[[col for col in cols_entrada if col in df_loaded.columns]].copy()
         
         # Garante que as colunas de ENTRADA existam, mesmo que vazias
         if "Custos Extras Produto" not in df_base_loaded.columns: df_base_loaded["Custos Extras Produto"] = 0.0
         if "Imagem" not in df_base_loaded.columns: df_base_loaded["Imagem"] = None
         if "Imagem_URL" not in df_base_loaded.columns: df_base_loaded["Imagem_URL"] = ""
+        # NOVAS COLUNAS
+        if "Cor" not in df_base_loaded.columns: df_base_loaded["Cor"] = ""
+        if "Marca" not in df_base_loaded.columns: df_base_loaded["Marca"] = ""
+        if "Data_Cadastro" not in df_base_loaded.columns: df_base_loaded["Data_Cadastro"] = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
+        
 
         if not df_base_loaded.empty:
             st.session_state.produtos_manuais = df_base_loaded.copy()
+            st.success(f"✅ {len(df_base_loaded)} produtos carregados do GitHub.")
         else:
             # Caso não consiga carregar do GitHub, usa dados de exemplo
-            st.warning("⚠️ Não foi possível carregar dados persistidos. Usando dados de exemplo.")
+            st.info("⚠️ Não foi possível carregar dados persistidos. Usando dados de exemplo.")
             exemplo_data = [
-                {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5},
-                {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8},
+                {"Produto": "Produto A", "Qtd": 10, "Custo Unitário": 5.0, "Margem (%)": 20, "Preço à Vista": 6.0, "Preço no Cartão": 6.5, "Cor": "Azul", "Marca": "Genérica", "Data_Cadastro": pd.to_datetime('2024-01-01').strftime('%Y-%m-%d')},
+                {"Produto": "Produto B", "Qtd": 5, "Custo Unitário": 3.0, "Margem (%)": 15, "Preço à Vista": 3.5, "Preço no Cartão": 3.8, "Cor": "Vermelho", "Marca": "XYZ", "Data_Cadastro": pd.to_datetime('2024-02-15').strftime('%Y-%m-%d')},
             ]
             df_base = pd.DataFrame(exemplo_data)
             df_base["Custos Extras Produto"] = 0.0
@@ -561,13 +599,92 @@ def precificacao_completa():
 
 
     # ----------------------------------------------------
-    # Tabela Geral (com Edição e Exclusão)
+    # Filtro por Data e Tabela Geral
+    # ----------------------------------------------------
+    
+    df_temp_filter = st.session_state.df_produtos_geral.copy()
+    df_produtos_filtrado = df_temp_filter.copy() # Default: sem filtro
+
+    if "Data_Cadastro" in df_temp_filter.columns and not df_temp_filter.empty:
+        st.subheader("🗓️ Filtro de Produtos por Data de Cadastro")
+        
+        # Garante que a coluna 'Data_Cadastro' esteja no formato datetime
+        df_temp_filter['Data_Cadastro_DT'] = pd.to_datetime(df_temp_filter['Data_Cadastro'], errors='coerce').dt.normalize()
+        
+        # Filtra valores inválidos para obter datas min/max válidas
+        valid_dates = df_temp_filter['Data_Cadastro_DT'].dropna()
+        
+        min_date = valid_dates.min().date() if not valid_dates.empty else datetime.today().date()
+        max_date = valid_dates.max().date() if not valid_dates.empty else datetime.today().date()
+        
+        # Garante que o min_date não é maior que o max_date
+        if min_date > max_date:
+            min_date = max_date 
+
+        # Define as datas de início e fim. Usa o máximo/mínimo do DF como padrão.
+        if 'data_inicio_filtro' not in st.session_state or st.session_state.data_inicio_filtro.date() < min_date:
+            st.session_state.data_inicio_filtro = min_date
+        if 'data_fim_filtro' not in st.session_state or st.session_state.data_fim_filtro.date() > max_date:
+            st.session_state.data_fim_filtro = max_date
+
+        # Input de data
+        col_date1, col_date2 = st.columns(2)
+        with col_date1:
+            data_inicio = st.date_input(
+                "📅 Data de Início", 
+                value=st.session_state.data_inicio_filtro,
+                min_value=min_date,
+                max_value=max_date,
+                key="input_data_inicio"
+            )
+        with col_date2:
+            data_fim = st.date_input(
+                "📅 Data de Fim", 
+                value=st.session_state.data_fim_filtro,
+                min_value=min_date,
+                max_value=max_date,
+                key="input_data_fim"
+            )
+            
+        # Atualiza o estado da sessão
+        st.session_state.data_inicio_filtro = pd.to_datetime(data_inicio)
+        st.session_state.data_fim_filtro = pd.to_datetime(data_fim)
+        
+        # Aplica o filtro
+        df_produtos_filtrado = df_temp_filter[
+            (df_temp_filter['Data_Cadastro_DT'] >= st.session_state.data_inicio_filtro.normalize()) &
+            (df_temp_filter['Data_Cadastro_DT'] <= st.session_state.data_fim_filtro.normalize())
+        ].copy()
+        
+        st.info(f"Mostrando {len(df_produtos_filtrado)} de {len(st.session_state.df_produtos_geral)} produtos de acordo com o filtro de data.")
+
+    # Armazena o DF filtrado para uso no PDF/Telegram e na exibição de resultados
+    st.session_state["df_filtrado_final"] = df_produtos_filtrado
+
+
+    # --- Botão de Geração de Relatório com Filtro ---
+    if st.button("📤 Gerar PDF e enviar para Telegram (Aplicando Filtro de Data)", key='precificacao_pdf_button'):
+        df_relatorio = st.session_state.get("df_filtrado_final")
+        if df_relatorio is None or df_relatorio.empty:
+            st.warning("⚠️ Nenhum produto encontrado com o filtro de data selecionado para gerar PDF.")
+        else:
+            pdf_io = gerar_pdf(df_relatorio) # Usa o DataFrame filtrado
+            # Passa o DataFrame filtrado para a função de envio (para usar data no caption)
+            enviar_pdf_telegram(pdf_io, df_relatorio, thread_id=TOPICO_ID)
+    
+    st.markdown("---")
+
+
+    # ----------------------------------------------------
+    # Tabela Geral (com Edição e Exclusão) - Unfiltered for editing stability
     # ----------------------------------------------------
     st.subheader("Produtos cadastrados (Clique no índice da linha e use DEL para excluir)")
     
+    # Colunas completas para exibição na tabela de edição principal (sem filtro)
     cols_display = [
         "Produto", "Qtd", "Custo Unitário", "Custos Extras Produto", 
-        "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão"
+        "Custo Total Unitário", "Margem (%)", "Preço à Vista", "Preço no Cartão",
+        "Cor", "Marca", "Data_Cadastro" 
     ]
     cols_to_show = [col for col in cols_display if col in st.session_state.df_produtos_geral.columns]
 
@@ -619,8 +736,12 @@ def precificacao_completa():
                 st.session_state.produtos_manuais.loc[manual_idx, "Qtd"] = row.get("Qtd", 1)
                 st.session_state.produtos_manuais.loc[manual_idx, "Custo Unitário"] = row.get("Custo Unitário", 0.0)
                 st.session_state.produtos_manuais.loc[manual_idx, "Margem (%)"] = row.get("Margem (%)", margem_fixa)
-                # NOTA: O campo 'Custos Extras Produto' é um dado de ENTRADA no editor
                 st.session_state.produtos_manuais.loc[manual_idx, "Custos Extras Produto"] = row.get("Custos Extras Produto", 0.0)
+                # NOVOS CAMPOS DE TEXTO/DATA
+                st.session_state.produtos_manuais.loc[manual_idx, "Cor"] = row.get("Cor", "")
+                st.session_state.produtos_manuais.loc[manual_idx, "Marca"] = row.get("Marca", "")
+                # Data de Cadastro NÃO é alterada na edição da tabela, a menos que o usuário a tenha alterado.
+                st.session_state.produtos_manuais.loc[manual_idx, "Data_Cadastro"] = row.get("Data_Cadastro", pd.to_datetime('today').normalize().strftime('%Y-%m-%d'))
 
 
         # 2b. Recalcula o DataFrame geral com base no manual atualizado
@@ -639,15 +760,16 @@ def precificacao_completa():
         st.rerun() 
 
 
-    if st.button("📤 Gerar PDF e enviar para Telegram", key='precificacao_pdf_button'):
-        if st.session_state.df_produtos_geral.empty:
-            st.warning("⚠️ Nenhum produto para gerar PDF.")
-        else:
-            pdf_io = gerar_pdf(st.session_state.df_produtos_geral)
-            # Passa o DataFrame completo para a função de envio
-            enviar_pdf_telegram(pdf_io, st.session_state.df_produtos_geral, thread_id=TOPICO_ID)
-    
+    # ----------------------------------------------------
+    # Seção de Resultados (usando o DF FILTRADO)
+    # ----------------------------------------------------
     st.markdown("---")
+    # Exibe os resultados detalhados usando o DataFrame filtrado por data
+    if "df_filtrado_final" in st.session_state and not st.session_state.df_filtrado_final.empty:
+        exibir_resultados(st.session_state.df_filtrado_final, imagens_dict)
+    else:
+        st.info("⚠️ Nenhum produto processado para exibir no filtro atual.")
+
     
     # ----------------------------------------------------
     # Abas de Precificação
@@ -673,6 +795,9 @@ def precificacao_completa():
                     df_pdf["Custos Extras Produto"] = 0.0
                     df_pdf["Imagem"] = None
                     df_pdf["Imagem_URL"] = "" # Inicializa nova coluna
+                    df_pdf["Cor"] = ""
+                    df_pdf["Marca"] = ""
+                    df_pdf["Data_Cadastro"] = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
                     # Concatena os novos produtos ao manual
                     st.session_state.produtos_manuais = pd.concat([st.session_state.produtos_manuais, df_pdf], ignore_index=True)
                     st.session_state.df_produtos_geral = processar_dataframe(
@@ -687,13 +812,17 @@ def precificacao_completa():
                 df_exemplo = load_csv_github(ARQ_CAIXAS)
                 if not df_exemplo.empty:
                     # Filtra colunas de ENTRADA
-                    cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+                    cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL", "Cor", "Marca", "Data_Cadastro"]
                     df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
                     
                     # Garante colunas ausentes
                     if "Custos Extras Produto" not in df_base_loaded.columns: df_base_loaded["Custos Extras Produto"] = 0.0
                     if "Imagem" not in df_base_loaded.columns: df_base_loaded["Imagem"] = None
                     if "Imagem_URL" not in df_base_loaded.columns: df_base_loaded["Imagem_URL"] = ""
+                    if "Cor" not in df_base_loaded.columns: df_base_loaded["Cor"] = ""
+                    if "Marca" not in df_base_loaded.columns: df_base_loaded["Marca"] = ""
+                    if "Data_Cadastro" not in df_base_loaded.columns: df_base_loaded["Data_Cadastro"] = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
+
 
                     st.session_state.produtos_manuais = df_base_loaded.copy()
                     st.session_state.df_produtos_geral = processar_dataframe(
@@ -762,6 +891,11 @@ def precificacao_completa():
                 # --- Campo de URL da Imagem ---
                 imagem_url = st.text_input("🔗 URL da Imagem (opcional)", key="input_imagem_url_manual")
                 # --- FIM NOVO ---
+                
+                # --- NOVOS CAMPOS DE CADASTRO ---
+                cor_produto = st.text_input("🎨 Cor do Produto", key="input_cor_manual")
+                marca_produto = st.text_input("🏭 Marca", key="input_marca_manual")
+                # --- FIM NOVOS CAMPOS DE CADASTRO ---
 
                 
             with col2:
@@ -835,6 +969,11 @@ def precificacao_completa():
                         elif imagem_url.strip():
                             url_salvar = imagem_url.strip()
 
+                        # --- CAPTURA DA DATA DE CADASTRO ---
+                        data_cadastro = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
+                        # --- FIM CAPTURA DA DATA DE CADASTRO ---
+
+
                         # Salva na lista manual apenas os dados de ENTRADA do usuário (Custo Extra ESPECÍFICO)
                         novo_produto_data = {
                             "Produto": [produto],
@@ -843,7 +982,10 @@ def precificacao_completa():
                             "Custos Extras Produto": [custo_extra_produto_salvar], # Salva apenas o custo específico (sem o rateio)
                             "Margem (%)": [margem_manual],
                             "Imagem": [imagem_bytes],
-                            "Imagem_URL": [url_salvar] # Salva a URL para persistência
+                            "Imagem_URL": [url_salvar], # Salva a URL para persistência
+                            "Cor": [cor_produto.strip()],
+                            "Marca": [marca_produto.strip()],
+                            "Data_Cadastro": [data_cadastro]
                         }
                         novo_produto = pd.DataFrame(novo_produto_data)
 
@@ -865,7 +1007,7 @@ def precificacao_completa():
                         st.success("✅ Produto adicionado!")
                         st.session_state["rerun_after_add"] = True 
                     else:
-                        st.warning("⚠️ Preencha todos os campos obrigatórios.")
+                        st.warning("⚠️ Preencha todos os campos obrigatórios (Produto, Qtd, Custo Unitário).")
 
             st.markdown("---")
             st.subheader("Produtos adicionados manualmente (com botão de Excluir individual)")
@@ -913,9 +1055,8 @@ def precificacao_completa():
                     st.rerun()
 
             if "df_produtos_geral" in st.session_state and not st.session_state.df_produtos_geral.empty:
-                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
-            else:
-                st.info("⚠️ Nenhum produto processado para exibir.")
+                # Exibe o DF geral, mas os resultados detalhados (exibir_resultados) já usam o df_filtrado_final
+                pass # A exibição de resultados detalhados está agora abaixo da tabela principal.
 
     # === Tab GitHub ===
     with tab_github:
@@ -924,21 +1065,20 @@ def precificacao_completa():
         if st.button("🔄 Carregar CSV do GitHub (Tab GitHub)"):
             df_exemplo = load_csv_github(ARQ_CAIXAS)
             if not df_exemplo.empty:
-                # O rateio global unitário e outros campos calculados são descartados no carregamento, 
-                # pois serão recalculados abaixo. Apenas as colunas de ENTRADA importam.
-                
-                cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL"]
+                # Filtra colunas de ENTRADA
+                cols_entrada = ["Produto", "Qtd", "Custo Unitário", "Margem (%)", "Custos Extras Produto", "Imagem", "Imagem_URL", "Cor", "Marca", "Data_Cadastro"]
                 
                 # Garante que só carrega colunas que existem no CSV e que são de ENTRADA
                 df_base_loaded = df_exemplo[[col for col in cols_entrada if col in df_exemplo.columns]].copy()
                 
-                # Adiciona colunas ausentes se necessário para o DF manual (Dados de ENTRADA)
-                if "Custos Extras Produto" not in df_base_loaded.columns:
-                    df_base_loaded["Custos Extras Produto"] = 0.0
-                if "Imagem" not in df_base_loaded.columns:
-                    df_base_loaded["Imagem"] = None
-                if "Imagem_URL" not in df_base_loaded.columns:
-                    df_base_loaded["Imagem_URL"] = ""
+                # Garante colunas ausentes
+                if "Custos Extras Produto" not in df_base_loaded.columns: df_base_loaded["Custos Extras Produto"] = 0.0
+                if "Imagem" not in df_base_loaded.columns: df_base_loaded["Imagem"] = None
+                if "Imagem_URL" not in df_base_loaded.columns: df_base_loaded["Imagem_URL"] = ""
+                if "Cor" not in df_base_loaded.columns: df_base_loaded["Cor"] = ""
+                if "Marca" not in df_base_loaded.columns: df_base_loaded["Marca"] = ""
+                if "Data_Cadastro" not in df_base_loaded.columns: df_base_loaded["Data_Cadastro"] = pd.to_datetime('today').normalize().strftime('%Y-%m-%d')
+
 
                 st.session_state.produtos_manuais = df_base_loaded.copy()
                 
@@ -947,7 +1087,7 @@ def precificacao_completa():
                     st.session_state.produtos_manuais, frete_total, custos_extras, modo_margem, margem_fixa
                 )
                 st.success("✅ CSV carregado e processado com sucesso!")
-                exibir_resultados(st.session_state.df_produtos_geral, imagens_dict)
+                # Força o rerun para re-aplicar os filtros de data no display
                 st.rerun()
 
 
@@ -1330,8 +1470,9 @@ def papelaria_aba():
             if not extras_produtos.empty:
                 st.markdown("**Campos extras**")
                 for i, row in extras_produtos.reset_index(drop=True).iterrows():
+                    campo = row["Campo"]
                     key = f"novo_produto_extra_{row['Campo']}"
-                    valores_extras_prod[row["Campo"]] = render_input_por_tipo(
+                    valores_extras_prod[campo] = render_input_por_tipo(
                         label=row["Campo"],
                         tipo=row["Tipo"],
                         opcoes=row["Opções"],
@@ -1427,7 +1568,7 @@ def papelaria_aba():
             )
 
             idxs_p = st.session_state.produtos.index[st.session_state.produtos["Produto"] == produto_selecionado].tolist()
-            idx_p = idxs[0] if idxs_p else None
+            idx_p = idxs_p[0] if idxs_p else None
 
             if acao_produto == "Excluir" and idx_p is not None:
                 if st.button("Confirmar Exclusão", key=f"excluir_produto_{idx_p}"):
