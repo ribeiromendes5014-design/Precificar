@@ -701,7 +701,7 @@ def precificacao_completa():
 
 
             if qtd_total_manual > 0:
-                rateio_calculado = (frete_total + custos_extras) / qtd_total_manual
+                rateio_calculado = (frete_manual + extras_manual) / qtd_total_manual
             else:
                 rateio_calculado = 0.0
             
@@ -748,14 +748,14 @@ def precificacao_completa():
                 rateio_global_unitario = st.session_state.get("rateio_global_unitario_atual", 0.0)
                 st.info(f"O Rateio Global por unidade (R$ {formatar_brl(rateio_global_unitario, decimais=4, prefixo=False)}) será adicionado automaticamente ao custo total.")
                 
-                # O valor padrão é o rateio global, como solicitado.
-                # O usuário pode alterar para adicionar um custo extra específico ALÉM do rateio.
+                # CORREÇÃO DE LÓGICA: O valor inicial do custo extra deve ser 0.0, 
+                # pois o rateio GLOBAL é adicionado automaticamente na função processar_dataframe.
+                # Se usarmos o rateio como padrão aqui, ele será adicionado DUAS VEZES.
                 custo_extra_produto = st.number_input(
-                    # A label foi corrigida para indicar que o usuário deve inserir apenas custos específicos.
                     "💰 Custos Extras ESPECÍFICOS do Produto (R$)", 
                     min_value=0.0, 
                     step=0.01, 
-                    value=rateio_global_unitario, # Puxa o rateio como valor padrão inicial
+                    value=0.0, # Corrigido para 0.0. O usuário insere apenas custos extras que não são o rateio.
                     key="input_custo_extra_manual"
                 )
                 
@@ -767,12 +767,9 @@ def precificacao_completa():
                 imagem_file = st.file_uploader("🖼️ Foto do Produto (Upload - opcional)", type=["png", "jpg", "jpeg"], key="imagem_manual")
 
 
-            # Custo total unitário AQUI inclui o rateio global ATUAL para fins de preview de preço
-            # O campo `custo_extra_produto` JÁ CONTÉM o rateio global unitário se não for alterado, 
-            # ou contém a soma do rateio + o valor que o usuário digitou, dependendo de como 
-            # o Streamlit atualizou o valor do input. 
-            # Para simplificar, vamos usar o valor do input `custo_extra_produto` e adicionar o `valor_pago`.
-            custo_total_unitario_com_rateio = valor_pago + custo_extra_produto # Usa o valor do input que já contém o rateio.
+            # Custo total unitário AQUI PARA FINS DE PRÉ-CÁLCULO E PREVIEW
+            # Deve ser: Custo Base + Custo Específico + Rateio Global
+            custo_total_unitario_com_rateio = valor_pago + custo_extra_produto + rateio_global_unitario
 
 
             margem_manual = 30.0 # Valor padrão
@@ -798,17 +795,9 @@ def precificacao_completa():
             st.markdown(f"**Preço à Vista Calculado:** {formatar_brl(preco_a_vista_calc)}")
             st.markdown(f"**Preço no Cartão Calculado:** {formatar_brl(preco_no_cartao_calc)}")
             
-            # --- CORREÇÃO FINAL: Garante que apenas o CUSTO EXTRA ESPECÍFICO (sem o rateio) seja salvo no DF Manual ---
-            # Isso é crucial, pois o `processar_dataframe` adiciona o rateio GLOBAL (frete_total + extras_global) novamente.
-            # Se o usuário não alterou o custo_extra_produto (e ele está com o valor do rateio),
-            # o custo extra específico deve ser 0.0.
-            if custo_extra_produto == rateio_global_unitario:
-                custo_extra_produto_salvar = 0.0
-            else:
-                # Se o usuário alterou, subtrai o rateio global para obter apenas o custo ESPECÍFICO.
-                # NOTA: O rateio global será adicionado novamente na função processar_dataframe.
-                custo_extra_produto_salvar = custo_extra_produto - rateio_global_unitario
-            # --- FIM CORREÇÃO FINAL ---
+            # O `Custos Extras Produto` salvo no DF manual é o valor digitado (Custos Extras ESPECÍFICOS), 
+            # pois o rateio global será adicionado no `processar_dataframe` com base no estado global.
+            custo_extra_produto_salvar = custo_extra_produto # É o valor específico (R$ 0,00 por padrão)
 
             with st.form("form_submit_manual"):
                 adicionar_produto = st.form_submit_button("➕ Adicionar Produto (Manual)")
@@ -845,6 +834,7 @@ def precificacao_completa():
                         ).reset_index(drop=True)
                         
                         # Processa e atualiza o DataFrame geral
+                        # O rateio global será recalculado em processar_dataframe usando frete_total e custos_extras
                         st.session_state.df_produtos_geral = processar_dataframe(
                             st.session_state.produtos_manuais,
                             frete_total,
